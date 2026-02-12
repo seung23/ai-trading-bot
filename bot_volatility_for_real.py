@@ -43,12 +43,13 @@ SELL_FEE = 0.00014        # 매도 수수료 0.014%
 
 # ── 유틸리티 ──
 def log_trade(side, price, quantity, profit=0, reason=""):
+    kst = timezone(timedelta(hours=9))
     file_exists = os.path.isfile(LOG_FILE)
     with open(LOG_FILE, mode='a', newline='', encoding='utf-8-sig') as f:
         writer = csv.writer(f)
         if not file_exists:
             writer.writerow(['시간', '구분', '가격', '수량', '순수익률', '사유', '참고사항'])
-        time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        time_str = datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
         writer.writerow([time_str, side, price, quantity, f"{profit:.2f}%", reason, "[실전] ETF 매수 0.014% + 매도 0.014%"])
 
 
@@ -72,13 +73,15 @@ def notify(notifier, title, body):
 
 
 def is_market_open():
-    now = datetime.now()
+    kst = timezone(timedelta(hours=9))
+    now = datetime.now(kst)
     return (9 <= now.hour < 15) or (now.hour == 15 and now.minute < 20)
 
 
 def wait_for_market_open():
+    kst = timezone(timedelta(hours=9))
     while True:
-        now = datetime.now()
+        now = datetime.now(kst)
         if now.hour >= 9:
             return
         remaining = (9 - now.hour - 1) * 3600 + (60 - now.minute) * 60
@@ -191,9 +194,10 @@ def run_bot():
     print(f"\n👀 모니터링 시작 (5분 간격)")
     print("-" * 40)
 
+    kst = timezone(timedelta(hours=9))
     while True:
         try:
-            now = datetime.now()
+            now = datetime.now(kst)
 
             # 장 마감 체크
             if now.hour >= 15 and now.minute >= 20:
