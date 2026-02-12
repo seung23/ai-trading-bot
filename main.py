@@ -15,7 +15,7 @@
 import os
 import csv
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 
 import broker
@@ -54,6 +54,9 @@ CHECK_INTERVAL = 1800       # 30분마다 체크 (초)
 BUY_FEE = 0.00014          # 매수 수수료 0.014%
 SELL_FEE = 0.00014         # 매도 수수료 0.014%
 
+# ── 시간대 설정 (한국 시간 KST) ──
+KST = timezone(timedelta(hours=9))
+
 
 # ── 로그 함수 ──
 def log_trade(side, price, quantity, profit=0, reason=""):
@@ -67,14 +70,14 @@ def log_trade(side, price, quantity, profit=0, reason=""):
         writer = csv.writer(f)
         if not file_exists:
             writer.writerow(['시간', '구분', '가격', '수량', '순수익률', '사유', '참고사항'])
-        time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        time_str = datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
         writer.writerow([time_str, side, price, quantity, f"{profit:.2f}%", reason, fee_info])
 
 
 def wait_for_market_open():
     """장 시작(09:00)까지 대기합니다."""
     while True:
-        now = datetime.now()
+        now = datetime.now(KST)
         if now.hour >= 9:
             return
         remaining = (9 - now.hour - 1) * 3600 + (60 - now.minute) * 60
@@ -87,7 +90,7 @@ def wait_for_market_open():
 
 def is_market_open():
     """현재 장 운영 시간(09:00~15:20)인지 확인합니다."""
-    now = datetime.now()
+    now = datetime.now(KST)
     return (9 <= now.hour < 15) or (now.hour == 15 and now.minute < 20)
 
 
@@ -240,7 +243,7 @@ def run_bot():
 
             profit_rate = (current_price - bought_price) / bought_price
             pnl_pct = (current_price * (1 - SELL_FEE) / (bought_price * (1 + BUY_FEE)) - 1) * 100  # 수수료 반영 수익률
-            now = datetime.now()
+            now = datetime.now(KST)
             print(f"[{now.strftime('%H:%M:%S')}] 현재가: {current_price:,.0f}원 | 수익률: {pnl_pct:+.2f}%")
 
             # Telegram 알림: 30분마다 보유 현황 (수수료 반영 수익률)
