@@ -195,6 +195,7 @@ def run_bot():
             wait_for_market_open()
 
         # 시가 캡처 (KIS API로 정확한 시가 조회)
+        time.sleep(3)  # 장 시작 직후 API 안정화 대기
         today_open = broker.get_today_open(token, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
         if today_open is None or today_open == 0:
             # fallback: yfinance 5분봉 첫 캔들

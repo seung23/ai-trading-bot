@@ -114,8 +114,8 @@ def get_yesterday_range():
     return float(yesterday['High']), float(yesterday['Low']), float(yesterday['High'] - yesterday['Low'])
 
 
-def get_today_open():
-    """당일 시가를 yfinance 5분봉 첫 캔들에서 가져옵니다."""
+def get_today_open_yf():
+    """(fallback) 당일 시가를 yfinance 5분봉 첫 캔들에서 가져옵니다."""
     df = yf.download(TICKER, period='1d', interval='5m')
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -183,11 +183,11 @@ def run_bot():
             print("장 시작을 기다립니다...")
             wait_for_market_open()
 
-        time.sleep(10)
-        today_open = get_today_open()
-        if today_open is None:
-            print("⚠️ yfinance 시가 조회 실패, KIS 현재가로 대체")
-            today_open = broker.get_current_price(token_real, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+        time.sleep(3)  # 장 시작 직후 API 안정화 대기
+        today_open = broker.get_today_open(token_real, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+        if today_open is None or today_open == 0:
+            print("⚠️ KIS API 시가 조회 실패, yfinance로 대체")
+            today_open = get_today_open_yf()
         if today_open is None:
             notify(notifier, "❌ <b>에러</b>", "시가 조회 실패")
             return
