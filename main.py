@@ -1,5 +1,5 @@
 # main.py
-# XGBoost 기반 일봉 AI 전략 (KODEX 코스닥150레버리지)
+# XGBoost 기반 일봉 AI 전략 (KODEX 코스닥150)
 # ──────────────────────────────────────────────────────────
 # 전략 흐름:
 #
@@ -35,8 +35,8 @@ URL_REAL = os.getenv("URL_REAL")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-TICKER = "233740.KS"       # KODEX 코스닥150레버리지
-STOCK_CODE = "233740"
+TICKER = "229200.KS"       # KODEX 코스닥150 (일반)
+STOCK_CODE = "229200"
 
 # ── 매매 모드 설정 ──
 # "REAL" = 실전 매매 (tr_id: TTTC*, 서버: URL_REAL)
@@ -46,13 +46,13 @@ TRADING_URL = URL_REAL if TRADING_MODE == "REAL" else URL_MOCK
 
 # ── 전략 파라미터 (백테스트 검증 완료) ──
 BUY_THRESHOLD = 0.60        # AI 상승 확률이 이 이상이면 매수
-TAKE_PROFIT = 0.015         # +1.5% 익절
-STOP_LOSS = -0.015          # -1.5% 손절
-POSITION_RATIO = 0.50       # 현금의 50% 투입
+TAKE_PROFIT = 0.01          # +1.0% 익절 (일반 ETF 1배 기준)
+STOP_LOSS = -0.01           # -1.0% 손절 (일반 ETF 1배 기준)
+POSITION_RATIO = 0.70       # 현금의 70% 투입 (일반 ETF는 변동성 낮아 비중 확대)
 CHECK_INTERVAL = 1800       # 30분마다 체크 (초)
-# ETF 수수료 (실전투자: 0.014%, 수수료 우대, 거래세 면제)
-BUY_FEE = 0.00014          # 매수 수수료 0.014%
-SELL_FEE = 0.00014         # 매도 수수료 0.014%
+# ETF 수수료 (실전투자: 0.004%, 수수료 우대 계좌, 거래세 면제)
+BUY_FEE = 0.00004          # 매수 수수료 0.004%
+SELL_FEE = 0.00004         # 매도 수수료 0.004%
 
 # ── 시간대 설정 (한국 시간 KST) ──
 KST = timezone(timedelta(hours=9))
@@ -63,7 +63,7 @@ def log_trade(side, price, quantity, profit=0, reason=""):
     """매매 내역을 trade_log.csv에 기록합니다."""
     file_name = 'trade_log.csv'
     mode_str = "실전" if TRADING_MODE == "REAL" else "모의"
-    fee_info = f"[{mode_str}] ETF 매수 0.014% + 매도 0.014%"
+    fee_info = f"[{mode_str}] ETF 매수 0.004% + 매도 0.004%"
     file_exists = os.path.isfile(file_name)
 
     with open(file_name, mode='a', newline='', encoding='utf-8-sig') as f:

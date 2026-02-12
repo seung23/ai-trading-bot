@@ -29,8 +29,8 @@ URL_MOCK = os.getenv("URL_MOCK")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-TICKER = "233740.KS"
-STOCK_CODE = "233740"
+TICKER = "229200.KS"       # KODEX 코스닥150 (일반)
+STOCK_CODE = "229200"
 
 # ── 전략 파라미터 ──
 BOT_NAME = "Volatility"

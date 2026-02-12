@@ -31,8 +31,8 @@ URL_MOCK = os.getenv("URL_MOCK")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-TICKER = "233740.KS"
-STOCK_CODE = "233740"
+TICKER = "229200.KS"       # KODEX 코스닥150 (일반)
+STOCK_CODE = "229200"
 
 # ── 전략 파라미터 ──
 BOT_NAME = "Combined"
@@ -45,10 +45,10 @@ K = 0.3                    # 지수 ETF는 변동폭이 작아 K를 낮춰 돌�
 # AI 파라미터 (변동성으로 1차 필터링되므로 BUY_THRESH 낮춤)
 BUY_THRESH = 0.60
 SELL_THRESH = 0.40
-TAKE_PROFIT = 0.015          # +1.5%
-STOP_LOSS = -0.015            # -1.2%
-TRAIL_ACTIVATE = 0.01         # +1.0%
-TRAIL_STOP = 0.005            # 0.5%
+TAKE_PROFIT = 0.01           # +1.0% (일반 ETF 1배 기준)
+STOP_LOSS = -0.01            # -1.0% (일반 ETF 1배 기준)
+TRAIL_ACTIVATE = 0.007       # +0.7%
+TRAIL_STOP = 0.003           # 0.3%
 POSITION_RATIO = 0.80
 CHECK_INTERVAL = 300
 # ETF 수수료 (모의투자: 0.014%, 거래세 면제)

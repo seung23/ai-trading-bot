@@ -26,19 +26,19 @@ URL_REAL = os.getenv("URL_REAL")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-TICKER = "233740.KS"
-STOCK_CODE = "233740"
+TICKER = "229200.KS"       # KODEX 코스닥150 (일반)
+STOCK_CODE = "229200"
 
 # ── 전략 파라미터 ──
 BOT_NAME = "Volatility-REAL"
 LOG_FILE = "trade_log_volatility_real.csv"
 K = 0.3                    # 지수 ETF는 변동폭이 작아 K를 낮춰 돌파 기회 확보
 MAX_SLIPPAGE = 0.01        # 목표가 대비 1% 이상 올라가 있으면 매수 스킵
-POSITION_RATIO = 0.50      # 현금의 50% 투입
+POSITION_RATIO = 0.70      # 현금의 70% 투입 (일반 ETF는 변동성 낮아 비중 확대)
 CHECK_INTERVAL = 60        # 1분마다 체크 (돌파 감지는 빠를수록 좋음)
-# ETF 수수료 (실전투자: 0.014%, 수수료 우대, 거래세 면제)
-BUY_FEE = 0.00014         # 매수 수수료 0.014%
-SELL_FEE = 0.00014        # 매도 수수료 0.014%
+# ETF 수수료 (실전투자: 0.004%, 수수료 우대 계좌, 거래세 면제)
+BUY_FEE = 0.00004         # 매수 수수료 0.004%
+SELL_FEE = 0.00004        # 매도 수수료 0.004%
 
 
 # ── 유틸리티 ──
@@ -50,7 +50,7 @@ def log_trade(side, price, quantity, profit=0, reason=""):
         if not file_exists:
             writer.writerow(['시간', '구분', '가격', '수량', '순수익률', '사유', '참고사항'])
         time_str = datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S')
-        writer.writerow([time_str, side, price, quantity, f"{profit:.2f}%", reason, "[실전] ETF 매수 0.014% + 매도 0.014%"])
+        writer.writerow([time_str, side, price, quantity, f"{profit:.2f}%", reason, "[실전] ETF 매수 0.004% + 매도 0.004%"])
 
 
 def load_unclosed_position():
