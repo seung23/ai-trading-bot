@@ -46,8 +46,8 @@ TRADING_URL = URL_REAL if TRADING_MODE == "REAL" else URL_MOCK
 
 # ── 전략 파라미터 (백테스트 검증 완료) ──
 BUY_THRESHOLD = 0.60        # AI 상승 확률이 이 이상이면 매수
-TAKE_PROFIT = 0.01          # +1.0% 익절 (일반 ETF 1배 기준)
-STOP_LOSS = -0.01           # -1.0% 손절 (일반 ETF 1배 기준)
+TAKE_PROFIT = 0.008         # +0.8% 익절 (일반 ETF 1배 기준)
+STOP_LOSS = -0.008          # -0.8% 손절 (일반 ETF 1배 기준)
 POSITION_RATIO = 0.70       # 현금의 70% 투입 (일반 ETF는 변동성 낮아 비중 확대)
 CHECK_INTERVAL = 1800       # 30분마다 체크 (초)
 # ETF 수수료 (실전투자: 0.004%, 수수료 우대 계좌, 거래세 면제)

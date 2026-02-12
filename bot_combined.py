@@ -45,9 +45,9 @@ K = 0.3                    # 지수 ETF는 변동폭이 작아 K를 낮춰 돌�
 # AI 파라미터 (변동성으로 1차 필터링되므로 BUY_THRESH 낮춤)
 BUY_THRESH = 0.60
 SELL_THRESH = 0.40
-TAKE_PROFIT = 0.01           # +1.0% (일반 ETF 1배 기준)
-STOP_LOSS = -0.01            # -1.0% (일반 ETF 1배 기준)
-TRAIL_ACTIVATE = 0.007       # +0.7%
+TAKE_PROFIT = 0.008          # +0.8% (일반 ETF 1배 기준)
+STOP_LOSS = -0.008           # -0.8% (일반 ETF 1배 기준)
+TRAIL_ACTIVATE = 0.006       # +0.6%
 TRAIL_STOP = 0.003           # 0.3%
 POSITION_RATIO = 0.80
 CHECK_INTERVAL = 300
