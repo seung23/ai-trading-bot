@@ -63,7 +63,7 @@ def log_trade(side, price, quantity, profit=0, reason=""):
     """매매 내역을 trade_log.csv에 기록합니다."""
     file_name = 'trade_log.csv'
     mode_str = "실전" if TRADING_MODE == "REAL" else "모의"
-    fee_info = f"[{mode_str}] ETF 매수 0.0146% + 매도 0.0146%"
+    fee_info = f"[{mode_str}] ETF 매수 0.014% + 매도 0.014%"
     file_exists = os.path.isfile(file_name)
 
     with open(file_name, mode='a', newline='', encoding='utf-8-sig') as f:
