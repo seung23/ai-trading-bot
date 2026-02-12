@@ -66,7 +66,8 @@ def load_unclosed_position():
 
 
 def notify(notifier, title, body):
-    msg = f"[{BOT_NAME}] {title}\n\n{body}\n시간: {datetime.now().strftime('%H:%M:%S')}"
+    kst = timezone(timedelta(hours=9))
+    msg = f"[{BOT_NAME}] {title}\n\n{body}\n시간: {datetime.now(kst).strftime('%H:%M:%S')}"
     notifier.send_message(msg)
 
 
