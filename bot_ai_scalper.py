@@ -4,7 +4,7 @@
 # 전략:
 #   60일 5분봉으로 XGBoost 학습 → 5분마다 AI 예측
 #   BUY: 상승 확률 ≥ 65% → 매수
-#   SELL: 익절(+0.8%) / 손절(-0.8%) / 트레일링스탑 / AI반전
+#   SELL: 익절(+1.0%) / 손절(-1.0%) / 트레일링스탑 / AI반전
 #   하루에 여러 번 진입/청산 가능
 # ──────────────────────────────────────────────────────────
 import os
@@ -40,9 +40,9 @@ LOG_FILE = "trade_log_scalper.csv"
 MODEL_FILE = "trading_brain_scalper.json"
 BUY_THRESH = 0.65           # AI 확률 65% 이상 매수
 SELL_THRESH = 0.40           # 확률 40% 이하 + 수익 중이면 청산
-TAKE_PROFIT = 0.008          # +0.8% 익절 (일반 ETF 1배 기준)
-STOP_LOSS = -0.008           # -0.8% 손절 (일반 ETF 1배 기준)
-TRAIL_ACTIVATE = 0.006       # +0.6% 도달 시 트레일링 활성화
+TAKE_PROFIT = 0.01           # +1.0% 익절 (일반 ETF 1배 기준)
+STOP_LOSS = -0.01            # -1.0% 손절 (일반 ETF 1배 기준)
+TRAIL_ACTIVATE = 0.007       # +0.7% 도달 시 트레일링 활성화
 TRAIL_STOP = 0.003           # 고점 대비 0.3% 하락 시 청산
 POSITION_RATIO = 0.80        # 현금의 80% 투입
 CHECK_INTERVAL = 60          # 1분마다 가격 체크 (손절/트레일링은 빠를수록 좋음)
