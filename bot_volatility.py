@@ -35,7 +35,8 @@ STOCK_CODE = "229200"
 # ── 전략 파라미터 ──
 BOT_NAME = "Volatility"
 LOG_FILE = "trade_log_volatility.csv"
-K = 0.3                    # 지수 ETF는 변동폭이 작아 K를 낮춰 돌파 기회 확보
+K_MIN = 0.3                # 추세 명확 시 최소 K (노이즈 비율 ≤ 0.4)
+K_MAX = 0.6                # 노이즈 심할 때 최대 K (노이즈 비율 ≥ 0.7)
 MAX_SLIPPAGE = 0.01        # 목표가 대비 1% 이상 올라가 있으면 매수 스킵
 POSITION_RATIO = 0.80      # 현금의 80% 투입
 CHECK_INTERVAL = 60        # 1분마다 체크 (돌파 감지는 빠를수록 좋음)
@@ -92,7 +93,7 @@ def wait_for_market_open():
 
 
 def get_yesterday_range():
-    """전일 고가-저가 변동폭을 구합니다."""
+    """전일 고가-저가 변동폭과 시가/종가를 구합니다."""
     df = yf.download(TICKER, period='5d', interval='1d')
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -102,10 +103,37 @@ def get_yesterday_range():
 
     if len(df_past) == 0:
         print("❌ 전일 데이터를 찾을 수 없습니다.")
-        return None, None, None
+        return None, None, None, None, None
 
     yesterday = df_past.iloc[-1]
-    return float(yesterday['High']), float(yesterday['Low']), float(yesterday['High'] - yesterday['Low'])
+    return (float(yesterday['High']), float(yesterday['Low']),
+            float(yesterday['High'] - yesterday['Low']),
+            float(yesterday['Open']), float(yesterday['Close']))
+
+
+def calculate_dynamic_k(yesterday_open, yesterday_close, yesterday_high, yesterday_low):
+    """전일 노이즈 비율로 K를 동적으로 결정합니다.
+
+    노이즈 비율 = 1 - (|시가 - 종가| / (고가 - 저가))
+    - 노이즈 ≤ 0.4 → 추세 명확 → K = 0.3 (공격적)
+    - 노이즈 ≥ 0.7 → 잔파도 심함 → K = 0.6 (보수적)
+    - 그 사이 → 선형 보간
+    """
+    day_range = yesterday_high - yesterday_low
+    if day_range == 0:
+        return K_MAX  # 변동 없으면 보수적으로
+
+    noise_ratio = 1 - abs(yesterday_open - yesterday_close) / day_range
+
+    # 노이즈 비율 0.4~0.7 구간을 K_MIN~K_MAX로 선형 보간
+    if noise_ratio <= 0.4:
+        k = K_MIN
+    elif noise_ratio >= 0.7:
+        k = K_MAX
+    else:
+        k = K_MIN + (noise_ratio - 0.4) / (0.7 - 0.4) * (K_MAX - K_MIN)
+
+    return round(k, 2)
 
 
 def get_today_open():
@@ -137,14 +165,18 @@ def run_bot():
         print("❌ 토큰 발급 실패. 종료합니다.")
         return
 
-    # ── STEP 2: 전일 변동폭 계산 ──
-    yesterday_high, yesterday_low, yesterday_range = get_yesterday_range()
+    # ── STEP 2: 전일 변동폭 + 노이즈 기반 K 계산 ──
+    yesterday_high, yesterday_low, yesterday_range, yesterday_open, yesterday_close = get_yesterday_range()
     if yesterday_range is None:
         notify(notifier, "❌ <b>에러</b>", "전일 데이터 조회 실패")
         return
 
+    K = calculate_dynamic_k(yesterday_open, yesterday_close, yesterday_high, yesterday_low)
+    noise_ratio = 1 - abs(yesterday_open - yesterday_close) / (yesterday_high - yesterday_low) if yesterday_high != yesterday_low else 1.0
+
     print(f"📊 전일 고가: {yesterday_high:,.0f}원, 저가: {yesterday_low:,.0f}원")
-    print(f"   변동폭: {yesterday_range:,.0f}원, K={K}")
+    print(f"   변동폭: {yesterday_range:,.0f}원")
+    print(f"   노이즈 비율: {noise_ratio:.2f} → K={K} (범위: {K_MIN}~{K_MAX})")
 
     # ── STEP 3: 미청산 포지션 확인 ──
     bought_price, holding_qty = load_unclosed_position()
@@ -182,7 +214,8 @@ def run_bot():
         notify(notifier, "📋 <b>오늘의 목표가</b>",
                f"시가: {today_open:,.0f}원\n"
                f"목표가: {target_price:,.0f}원\n"
-               f"변동폭: {yesterday_range:,.0f}원 × K={K}")
+               f"변동폭: {yesterday_range:,.0f}원 × K={K}\n"
+               f"노이즈: {noise_ratio:.2f} (K범위: {K_MIN}~{K_MAX})")
     else:
         # 미청산 포지션이 있으면 목표가 불필요 (이미 매수됨)
         target_price = 0
