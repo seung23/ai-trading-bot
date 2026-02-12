@@ -8,6 +8,20 @@
 [![XGBoost](https://img.shields.io/badge/XGBoost-2.0+-green.svg)](https://xgboost.readthedocs.io/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+---
+
+## 📋 목차
+
+- [프로젝트 개요](#-프로젝트-개요)
+- [주요 기능](#-주요-기능)
+- [기술 스택](#-기술-스택)
+- [트레이딩 전략](#-트레이딩-전략)
+- [시작하기](#-시작하기)
+- [사용법](#-사용법)
+- [백테스팅](#-백테스팅)
+- [프로젝트 구조](#-프로젝트-구조)
+- [주의사항](#%EF%B8%8F-주의사항)
+- [라이선스](#-라이선스)
 
 ---
 
