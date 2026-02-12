@@ -74,6 +74,34 @@ def get_current_price(token, app_key, app_secret, url_base, stock_code):
         print(f"❌ 시세 조회 실패: {res_data.get('msg1')}")
         return None
 
+def get_today_open(token, app_key, app_secret, url_base, stock_code):
+    """한국투자증권 API를 통해 당일 시가를 가져옵니다."""
+    PATH = "uapi/domestic-stock/v1/quotations/inquire-price"
+    URL = f"{url_base}/{PATH}"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}",
+        "appkey": app_key,
+        "appsecret": app_secret,
+        "tr_id": "FHKST01010100"
+    }
+
+    params = {
+        "FID_COND_MRKT_DIV_CODE": "J",
+        "FID_INPUT_ISCD": stock_code
+    }
+
+    res = requests.get(URL, headers=headers, params=params)
+    res_data = res.json()
+
+    if res_data.get('output'):
+        return float(res_data['output']['stck_oprc'])
+    else:
+        print(f"❌ 시가 조회 실패: {res_data.get('msg1')}")
+        return None
+
+
 def get_balance(token, app_key, app_secret, url_base, acc_no, stock_code, mode="MOCK"):
     """계좌의 현금 잔고(주문 가능 금액)를 숫자로 반환합니다."""
     PATH = "uapi/domestic-stock/v1/trading/inquire-psbl-order"

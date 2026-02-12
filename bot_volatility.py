@@ -136,8 +136,8 @@ def calculate_dynamic_k(yesterday_open, yesterday_close, yesterday_high, yesterd
     return round(k, 2)
 
 
-def get_today_open():
-    """당일 시가를 yfinance 5분봉 첫 캔들에서 가져옵니다."""
+def get_today_open_yf():
+    """(fallback) 당일 시가를 yfinance 5분봉 첫 캔들에서 가져옵니다."""
     df = yf.download(TICKER, period='1d', interval='5m')
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -192,13 +192,12 @@ def run_bot():
             print("장 시작을 기다립니다...")
             wait_for_market_open()
 
-        # 시가 캡처 (yfinance 5분봉 첫 캔들의 시가 사용 — 언제 실행해도 동일)
-        time.sleep(10)  # yfinance 데이터 반영 대기
-        today_open = get_today_open()
-        if today_open is None:
-            # fallback: KIS API 현재가 사용
-            print("⚠️ yfinance 시가 조회 실패, KIS 현재가로 대체")
-            today_open = broker.get_current_price(token_real, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+        # 시가 캡처 (KIS API로 정확한 시가 조회)
+        today_open = broker.get_today_open(token_real, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+        if today_open is None or today_open == 0:
+            # fallback: yfinance 5분봉 첫 캔들
+            print("⚠️ KIS API 시가 조회 실패, yfinance로 대체")
+            today_open = get_today_open_yf()
         if today_open is None:
             notify(notifier, "❌ <b>에러</b>", "시가 조회 실패")
             print("❌ 시가 조회 실패. 종료합니다.")
