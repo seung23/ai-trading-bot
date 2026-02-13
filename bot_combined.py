@@ -183,12 +183,22 @@ def run_bot():
             print("장 시작을 기다립니다...")
             wait_for_market_open()
 
-        time.sleep(3)  # 장 시작 직후 API 안정화 대기
-        today_open = broker.get_today_open(token_real, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
-        if today_open is None or today_open == 0:
-            print("⚠️ KIS API 시가 조회 실패, yfinance로 대체")
+        # 시가 캡처 (KIS API로 정확한 시가 조회, 재시도 포함)
+        today_open = None
+        max_retries = 6  # 최대 30초 (5초 × 6회)
+        for attempt in range(max_retries):
+            time.sleep(5)  # 장 시작 직후 API 안정화 대기
+            today_open = broker.get_today_open(token_real, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+            if today_open is not None and today_open > 0:
+                print(f"✅ 시가 조회 성공: {today_open:,.0f}원 (시도 {attempt+1}회)")
+                break
+            print(f"⏳ 시가 조회 재시도 중... ({attempt+1}/{max_retries})")
+        else:
+            # 재시도 실패, fallback
+            print("⚠️ KIS API 시가 조회 실패 (30초 타임아웃), yfinance로 대체")
             today_open = get_today_open_yf()
-        if today_open is None:
+
+        if today_open is None or today_open == 0:
             notify(notifier, "❌ <b>에러</b>", "시가 조회 실패")
             return
 
