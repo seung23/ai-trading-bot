@@ -119,7 +119,7 @@ def add_indicators(df):
     df['Vol_6'] = df['종가'].rolling(6).std()
 
     lookahead = 6
-    profit_target = 0.015
+    profit_target = 0.008  # 0.8% (5분봉 단타용, 1.5%에서 하향)
     target = pd.Series(0, index=df.index)
     for i in range(len(df) - lookahead):
         current_price = df['종가'].iloc[i]
