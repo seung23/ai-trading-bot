@@ -232,7 +232,7 @@ def run_bot():
         today_open = 0
 
     # ── STEP 5: 메인 루프 ──
-    print(f"\n👀 모니터링 시작 (5분 간격)")
+    print(f"\n👀 모니터링 시작 (1분 간격)")
     print("-" * 40)
 
     kst = timezone(timedelta(hours=9))
