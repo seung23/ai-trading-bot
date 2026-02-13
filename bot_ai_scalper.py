@@ -206,10 +206,7 @@ def run_bot():
                 df_live = data_manager.add_indicators(df_base.copy())
                 if df_live is not None and len(df_live) > 0:
                     latest = df_live.iloc[-1]
-                    signal_result, last_prob = ai_model.predict_signal(xgb_model, latest, features, BUY_THRESH)
-                    print(f"🤖 [DEBUG] AI 예측: {last_prob:.2%} ({signal_result})")
-                else:
-                    print(f"⚠️ [DEBUG] 데이터 갱신 실패: df_live가 비어있음")
+                    _, last_prob = ai_model.predict_signal(xgb_model, latest, features, BUY_THRESH)
                 last_data_refresh = current_time
 
             prob = last_prob
@@ -217,7 +214,7 @@ def run_bot():
 
             # ── 미보유: 매수 판단 ──
             if bought_price == 0:
-                print(f"[{now.strftime('%H:%M:%S')}] 현재가: {current_price:,.0f}원 | AI: {prob:.0%} | {'🔥 매수!' if signal == 'BUY' else '대기'}")
+                print(f"[{now.strftime('%H:%M:%S')}] 현재가: {current_price:,.0f}원 | AI: {prob:.1%} | {'🔥 매수!' if signal == 'BUY' else '대기'}")
 
                 if signal == 'BUY':
                     cash = broker.get_balance(
@@ -252,10 +249,10 @@ def run_bot():
 
                         highest_price = bought_price
                         trailing_active = False
-                        log_trade("매수", bought_price, holding_qty, reason=f"AI신호({prob:.0%})")
+                        log_trade("매수", bought_price, holding_qty, reason=f"AI신호({prob:.1%})")
                         notify(notifier, "📈 <b>매수 체결!</b>",
-                               f"가격: {bought_price:,.0f}원\n수량: {holding_qty}주\nAI 확률: {prob:.0%}")
-                        print(f"✅ 매수 체결! {bought_price:,.0f}원 × {holding_qty}주 (AI: {prob:.0%})")
+                               f"가격: {bought_price:,.0f}원\n수량: {holding_qty}주\nAI 확률: {prob:.1%}")
+                        print(f"✅ 매수 체결! {bought_price:,.0f}원 × {holding_qty}주 (AI: {prob:.1%})")
                     else:
                         print(f"❌ 매수 실패: {res.get('msg1')}")
 
@@ -282,10 +279,10 @@ def run_bot():
                     if drop <= -TRAIL_STOP:
                         sell_reason = f"트레일링스탑(고점 {highest_price:,.0f}→{current_price:,.0f})"
                 elif prob < SELL_THRESH and profit_rate > 0:
-                    sell_reason = f"AI반전({prob:.0%}, 수익 {profit_rate:.2%})"
+                    sell_reason = f"AI반전({prob:.1%}, 수익 {profit_rate:.2%})"
 
                 trail_info = f" [T:{highest_price:,.0f}]" if trailing_active else ""
-                print(f"[{now.strftime('%H:%M:%S')}] 현재가: {current_price:,.0f}원 | 수익: {pnl_pct:+.2f}% | AI: {prob:.0%}{trail_info}")
+                print(f"[{now.strftime('%H:%M:%S')}] 현재가: {current_price:,.0f}원 | 수익: {pnl_pct:+.2f}% | AI: {prob:.1%}{trail_info}")
 
                 # 매도 실행
                 if sell_reason:
