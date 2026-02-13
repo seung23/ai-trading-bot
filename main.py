@@ -6,7 +6,7 @@
 #   1) 실행 시 1년치 일봉 수집 → XGBoost 학습
 #   2) 어제 일봉 기준으로 AI 판단 (1회)
 #   3-A) 보유 없음 + 확률 < 60% → "오늘은 매수 없음" → 종료
-#   3-B) 보유 없음 + 확률 ≥ 60% → 9시 장 시작 대기 → 매수
+#   3-B) 보유 없음 + 확률 ≥ 60% → 9시 장 시작 대기 → 시가 매수
 #        → 이후 30분마다 익절/손절 감시
 #        → 매도 완료 → 종료
 #   3-C) 기존 보유 있음 → 30분마다 익절/손절 감시
@@ -172,17 +172,30 @@ def run_bot():
             print("장 시작을 기다립니다...")
             wait_for_market_open()
 
-        # 매수 실행
-        current_price = broker.get_current_price(token, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
-        if current_price is None:
-            notifier.notify_error("현재가 조회 실패")
-            print("❌ 현재가 조회 실패. 종료합니다.")
+        # 시가 조회 (KIS API, 재시도 포함)
+        buy_price = None
+        max_retries = 6  # 최대 30초 (5초 × 6회)
+        for attempt in range(max_retries):
+            time.sleep(5)
+            buy_price = broker.get_today_open(token, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+            if buy_price is not None and buy_price > 0:
+                print(f"✅ 시가 조회 성공: {buy_price:,.0f}원 (시도 {attempt+1}회)")
+                break
+            print(f"⏳ 시가 조회 재시도 중... ({attempt+1}/{max_retries})")
+        else:
+            # 재시도 실패, 현재가로 fallback
+            print("⚠️ 시가 조회 실패, 현재가로 대체")
+            buy_price = broker.get_current_price(token, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+
+        if buy_price is None:
+            notifier.notify_error("시가/현재가 조회 실패")
+            print("❌ 시가/현재가 조회 실패. 종료합니다.")
             notifier.notify_finish()
             return
 
         cash = broker.get_balance(
             token, APP_KEY, APP_SECRET, TRADING_URL, ACC_NO, STOCK_CODE, mode=TRADING_MODE)
-        buy_qty = int((cash * POSITION_RATIO) / current_price)
+        buy_qty = int((cash * POSITION_RATIO) / buy_price)
 
         if buy_qty <= 0:
             notifier.notify_error(f"잔고 부족 (현금: {cash:,}원)")
@@ -190,10 +203,10 @@ def run_bot():
             notifier.notify_finish()
             return
 
-        print(f"📈 매수 실행! {current_price:,.0f}원 × {buy_qty}주")
+        print(f"📈 매수 실행! {buy_price:,.0f}원 × {buy_qty}주")
         res = broker.post_order(
             token, APP_KEY, APP_SECRET, TRADING_URL, ACC_NO,
-            STOCK_CODE, buy_qty, current_price, mode=TRADING_MODE)
+            STOCK_CODE, buy_qty, buy_price, mode=TRADING_MODE)
 
         if res.get('rt_cd') != '0':
             notifier.notify_error(f"매수 주문 실패: {res.get('msg1')}")

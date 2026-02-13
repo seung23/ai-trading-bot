@@ -199,14 +199,17 @@ def add_daily_indicators(df):
     df['Vol_Avg'] = df['거래량'].rolling(window=10).mean()
     df['Vol_Ratio'] = df['거래량'] / df['Vol_Avg']
 
-    # 타겟: 향후 5일 이내 3% 수익 도달 여부
+    # 타겟: 다음날 시가 매수 시, 향후 5일 이내 3% 수익 도달 여부
+    # (실제 매매: 어제 데이터로 예측 → 오늘 시가에 매수)
     lookahead = 5
     profit_target = 0.03
     target = pd.Series(0, index=df.index)
-    for i in range(len(df) - lookahead):
-        current_price = df['종가'].iloc[i]
+    for i in range(len(df) - lookahead - 1):
+        entry_price = df['시가'].iloc[i + 1]  # 다음날 시가 (실제 진입가)
+        if entry_price <= 0:
+            continue
         future_highs = df['고가'].iloc[i + 1:i + 1 + lookahead]
-        max_profit = (future_highs / current_price - 1).max()
+        max_profit = (future_highs / entry_price - 1).max()
         if max_profit >= profit_target:
             target.iloc[i] = 1
     df['target'] = target
