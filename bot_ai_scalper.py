@@ -206,7 +206,10 @@ def run_bot():
                 df_live = data_manager.add_indicators(df_base.copy())
                 if df_live is not None and len(df_live) > 0:
                     latest = df_live.iloc[-1]
-                    _, last_prob = ai_model.predict_signal(xgb_model, latest, features, BUY_THRESH)
+                    signal_result, last_prob = ai_model.predict_signal(xgb_model, latest, features, BUY_THRESH)
+                    print(f"🤖 [DEBUG] AI 예측: {last_prob:.2%} ({signal_result})")
+                else:
+                    print(f"⚠️ [DEBUG] 데이터 갱신 실패: df_live가 비어있음")
                 last_data_refresh = current_time
 
             prob = last_prob
