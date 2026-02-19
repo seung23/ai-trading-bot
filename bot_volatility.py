@@ -305,7 +305,9 @@ def run_bot():
                         STOCK_CODE, buy_qty, current_price, mode="MOCK")
 
                     if res.get('rt_cd') == '0':
-                        # 체결 확인
+                        # 체결 확인 (20초 대기)
+                        bought_price = 0
+                        holding_qty = 0
                         for _ in range(10):
                             time.sleep(2)
                             bp = broker.get_stock_balance(
@@ -317,15 +319,19 @@ def run_bot():
                                     token_mock, MOCK_APP_KEY, MOCK_APP_SECRET, URL_MOCK, MOCK_ACC_NO,
                                     STOCK_CODE, mode="MOCK")
                                 break
-                        else:
-                            bought_price = current_price
-                            holding_qty = buy_qty
 
-                        log_trade("매수", bought_price, holding_qty, reason=f"돌파(목표 {target_price:,.0f}원)")
-                        notify(notifier, "📈 <b>돌파 매수!</b>",
-                               f"가격: {bought_price:,.0f}원\n수량: {holding_qty}주\n목표가: {target_price:,.0f}원")
-                        print(f"✅ 매수 체결! {bought_price:,.0f}원 × {holding_qty}주")
-                        state = "BOUGHT"
+                        if holding_qty > 0:
+                            log_trade("매수", bought_price, holding_qty, reason=f"돌파(목표 {target_price:,.0f}원)")
+                            notify(notifier, "📈 <b>돌파 매수!</b>",
+                                   f"가격: {bought_price:,.0f}원\n수량: {holding_qty}주\n목표가: {target_price:,.0f}원")
+                            print(f"✅ 매수 체결! {bought_price:,.0f}원 × {holding_qty}주")
+                            state = "BOUGHT"
+                        else:
+                            # 20초 내 잔고 미확인 → 미체결로 판단, 당일 매매 포기
+                            notify(notifier, "⚠️ <b>미체결 감지</b>",
+                                   f"20초 내 잔고 미확인\n주문은 장마감 시 자동 취소됩니다\n당일 매매를 포기합니다")
+                            print(f"⚠️ 미체결: 20초 내 잔고 확인 실패. 당일 매매 포기.")
+                            state = "SOLD"
                     else:
                         notify(notifier, "❌ <b>매수 실패</b>", f"{res.get('msg1')}")
                         print(f"❌ 매수 실패: {res.get('msg1')}")

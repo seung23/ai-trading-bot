@@ -228,9 +228,9 @@ def post_order(token, app_key, app_secret, url_base, acc_no, stock_code, quantit
         "CANO": acc_no,
         "ACNT_PRDT_CD": "01",
         "PDNO": stock_code,
-        "ORD_DVSN": "00",
+        "ORD_DVSN": "01",
         "ORD_QTY": str(quantity),
-        "ORD_UNPR": str(int(price))
+        "ORD_UNPR": "0"
     }
 
     res = requests.post(URL, headers=headers, data=json.dumps(body))
@@ -253,9 +253,9 @@ def post_sell_order(token, app_key, app_secret, url_base, acc_no, stock_code, qu
         "CANO": acc_no,
         "ACNT_PRDT_CD": "01",
         "PDNO": stock_code,
-        "ORD_DVSN": "00",
+        "ORD_DVSN": "01",
         "ORD_QTY": str(quantity),
-        "ORD_UNPR": str(int(price))
+        "ORD_UNPR": "0"
     }
 
     res = requests.post(URL, headers=headers, data=json.dumps(body))
