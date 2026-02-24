@@ -31,7 +31,7 @@
 
 ## 주요 기능
 
-### 1. 변동성 돌파 실전 매매봇 (`bot_volatility_for_real.py`)
+### 1. 변동성 돌파 실전 매매봇 (`main.py`) - 실전투자
 **실전투자 전용** 래리 윌리엄스 변동성 돌파 전략 봇
 - 실전 계좌 연동 (한국투자증권 Open API)
 - 동적 K값 계산 (노이즈 비율 기반)
@@ -39,15 +39,15 @@
 - Telegram 실시간 알림
 - 거래 로그 CSV 자동 기록
 
-### 2. 변동성 돌파 모의투자 (`bot_volatility.py`)
-모의투자 환경에서 변동성 돌파 전략 테스트
+### 2. 변동성 돌파 (`bot_volatility.py`) - 모의투자
+모의투자 환경에서 변동성 돌파 전략 테스트용 봇
 
-### 3. AI 스캘핑 전략 (`bot_ai_scalper.py`)
+### 3. AI 스캘핑 (`bot_ai_scalper.py`) - 모의투자
 XGBoost 5분봉 예측 기반 단타 매매 (보조 전략)
 - AI 상승 확률 기반 진입/청산
 - 익절/손절/트레일링 스탑
 
-### 4. 복합 전략 (`bot_combined.py`)
+### 4. 복합 전략 (`bot_combined.py`) - 모의투자
 변동성 돌파 + AI 필터 하이브리드 (보조 전략)
 - 변동성 돌파 AND AI 확률 이중 필터
 
@@ -112,14 +112,14 @@ python get_chat_id.py
 
 ### 실전 매매 (변동성 돌파)
 ```bash
-python bot_volatility_for_real.py
+python main.py
 ```
 
 ### 모의투자
 ```bash
-python bot_volatility.py      # 변동성 돌파
-python bot_ai_scalper.py      # AI 스캘핑
-python bot_combined.py        # 복합 전략
+python bot_volatility.py      # 변동성 돌파 (모의투자)
+python bot_ai_scalper.py      # AI 스캘핑 (모의투자)
+python bot_combined.py        # 복합 전략 (모의투자)
 ```
 
 ### 백테스팅
@@ -135,10 +135,10 @@ python optimizer.py           # 파라미터 최적화
 ```
 ai-trading-bot/
 |
-|-- bot_volatility_for_real.py   # [핵심] 변동성 돌파 실전 매매봇
+|-- main.py                     # [핵심] 변동성 돌파 실전 매매봇 (실전투자)
 |-- bot_volatility.py            # 변동성 돌파 (모의투자)
-|-- bot_ai_scalper.py            # AI 스캘핑 (보조)
-|-- bot_combined.py              # 복합 전략 (보조)
+|-- bot_ai_scalper.py            # AI 스캘핑 (모의투자)
+|-- bot_combined.py              # 복합 전략 (모의투자)
 |
 |-- broker.py                    # 한국투자증권 API 래퍼
 |-- data_manager.py              # 데이터 수집 및 지표 계산
