@@ -36,7 +36,7 @@ K_MIN = 0.3                # 추세 명확 시 최소 K (노이즈 비율 ≤ 0.
 K_MAX = 0.6                # 노이즈 심할 때 최대 K (노이즈 비율 ≥ 0.7)
 MAX_SLIPPAGE = 0.01        # 목표가 대비 1% 이상 올라가 있으면 매수 스킵
 POSITION_RATIO = 0.70      # 현금의 70% 투입 (일반 ETF는 변동성 낮아 비중 확대)
-CHECK_INTERVAL = 60        # 1분마다 체크 (돌파 감지는 빠를수록 좋음)
+CHECK_INTERVAL = 2         # 2초마다 체크 (API 응답 포함 실제 ~3초 주기)
 # ETF 수수료 (실전투자: 0.004%, 수수료 우대 계좌, 거래세 면제)
 BUY_FEE = 0.00004         # 매수 수수료 0.004%
 SELL_FEE = 0.00004        # 매도 수수료 0.004%
@@ -257,11 +257,12 @@ def run_bot():
                             print(f"⏹️ 장마감 강제청산! 수익률: {profit_rate:+.2f}%")
                         else:
                             notify(notifier, "❌ <b>매도 실패</b>", f"{res.get('msg1')}")
-                else:
+                    notify(notifier, "✅ <b>봇 종료</b>", "내일 다시 실행됩니다.")
+                elif state == "WAITING":
                     notify(notifier, "⏹️ <b>장 마감</b>", "오늘은 돌파 없음. 매매 없이 종료.")
                     print("⏹️ 장 마감. 오늘은 돌파 없었습니다.")
-
-                notify(notifier, "✅ <b>봇 종료</b>", "내일 다시 실행됩니다.")
+                    notify(notifier, "✅ <b>봇 종료</b>", "내일 다시 실행됩니다.")
+                # state == "SOLD": 당일 매매 완료, 장 마감 알림 없음
                 print("프로그램을 종료합니다.")
                 return
 
