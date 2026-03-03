@@ -203,11 +203,22 @@ def run_bot():
         print(f"   변동폭: {yesterday_range:,.0f}원")
         print(f"   노이즈 비율: {noise_ratio:.2f} → K={K} (범위: {K_MIN}~{K_MAX})")
 
-        # ── STEP 3: 미청산 포지션 확인 ──
+        # ── STEP 3: 미청산 포지션 확인 (CSV + 실제 계좌 교차 검증) ──
         bought_price, holding_qty = load_unclosed_position()
         if bought_price > 0:
-            print(f"⚡ 미청산 포지션 복구: {holding_qty}주, 매수가 {bought_price:,.0f}원")
-            state = "BOUGHT"
+            # CSV에 미청산 기록이 있어도, 실제 계좌 잔고로 검증
+            actual_qty = broker.get_holding_quantity(
+                token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
+            if actual_qty > 0:
+                holding_qty = actual_qty  # 실제 수량으로 덮어씀
+                print(f"⚡ 미청산 포지션 복구: {holding_qty}주, 매수가 {bought_price:,.0f}원")
+                state = "BOUGHT"
+            else:
+                print(f"⚠️ CSV에 미청산 기록 있으나 실제 잔고 없음 → 포지션 없음으로 처리")
+                notify(notifier, "⚠️ <b>포지션 불일치</b>",
+                       f"CSV: {holding_qty}주 보유 기록\n실제 계좌: 0주\n신규 매매로 진행합니다.")
+                bought_price, holding_qty = 0, 0
+                state = "WAITING"
         else:
             state = "WAITING"
 
