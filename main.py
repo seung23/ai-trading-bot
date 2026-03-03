@@ -93,9 +93,9 @@ def wait_for_market_open():
             time.sleep(10)
 
 
-def get_yesterday_range():
-    """전일 고가-저가 변동폭과 시가/종가를 구합니다."""
-    df = yf.download(TICKER, period='5d', interval='1d')
+def get_yesterday_range_yf():
+    """(fallback) yfinance로 전일 고가-저가 변동폭과 시가/종가를 구합니다."""
+    df = yf.download(TICKER, period='5d', interval='1d', timeout=10)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
@@ -105,13 +105,35 @@ def get_yesterday_range():
     df_past = df[df.index.date < today]
 
     if len(df_past) == 0:
-        print("❌ 전일 데이터를 찾을 수 없습니다.")
+        print("❌ yfinance: 전일 데이터를 찾을 수 없습니다.")
         return None, None, None, None, None
 
     yesterday = df_past.iloc[-1]
     return (float(yesterday['High']), float(yesterday['Low']),
             float(yesterday['High'] - yesterday['Low']),
             float(yesterday['Open']), float(yesterday['Close']))
+
+
+def get_yesterday_range(token=None):
+    """전일 고가-저가 변동폭과 시가/종가를 구합니다.
+    1차: KIS API (빠르고 안정적)
+    2차: yfinance (fallback, timeout 10초)
+    """
+    # 1차: KIS API
+    if token:
+        ohlc = broker.get_yesterday_ohlc(token, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+        if ohlc:
+            high, low = ohlc['high'], ohlc['low']
+            print(f"✅ KIS API로 전일 데이터 조회 성공")
+            return high, low, high - low, ohlc['open'], ohlc['close']
+        print("⚠️ KIS API 전일 데이터 실패, yfinance로 대체 시도...")
+
+    # 2차: yfinance (timeout 포함)
+    try:
+        return get_yesterday_range_yf()
+    except Exception as e:
+        print(f"❌ yfinance 전일 데이터 조회 실패: {e}")
+        return None, None, None, None, None
 
 
 def calculate_dynamic_k(yesterday_open, yesterday_close, yesterday_high, yesterday_low):
@@ -141,7 +163,7 @@ def calculate_dynamic_k(yesterday_open, yesterday_close, yesterday_high, yesterd
 
 def get_today_open_yf():
     """(fallback) 당일 시가를 yfinance 5분봉 첫 캔들에서 가져옵니다."""
-    df = yf.download(TICKER, period='1d', interval='5m')
+    df = yf.download(TICKER, period='1d', interval='5m', timeout=10)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
@@ -160,76 +182,85 @@ def run_bot():
     print(f"🚀 Larry Williams 변동성 돌파 봇 시작! (🔴 실전투자)")
     print("=" * 60)
 
-    # ── STEP 1: 토큰 발급 ──
-    token = broker.get_access_token(APP_KEY, APP_SECRET, URL_REAL)
-    if not token:
-        notify(notifier, "❌ <b>에러</b>", "토큰 발급 실패")
-        print("❌ 토큰 발급 실패. 종료합니다.")
-        return
-
-    # ── STEP 2: 전일 변동폭 + 노이즈 기반 K 계산 ──
-    yesterday_high, yesterday_low, yesterday_range, yesterday_open, yesterday_close = get_yesterday_range()
-    if yesterday_range is None:
-        notify(notifier, "❌ <b>에러</b>", "전일 데이터 조회 실패")
-        return
-
-    K = calculate_dynamic_k(yesterday_open, yesterday_close, yesterday_high, yesterday_low)
-    noise_ratio = 1 - abs(yesterday_open - yesterday_close) / (yesterday_high - yesterday_low) if yesterday_high != yesterday_low else 1.0
-
-    print(f"📊 전일 고가: {yesterday_high:,.0f}원, 저가: {yesterday_low:,.0f}원")
-    print(f"   변동폭: {yesterday_range:,.0f}원")
-    print(f"   노이즈 비율: {noise_ratio:.2f} → K={K} (범위: {K_MIN}~{K_MAX})")
-
-    # ── STEP 3: 미청산 포지션 확인 ──
-    bought_price, holding_qty = load_unclosed_position()
-    if bought_price > 0:
-        print(f"⚡ 미청산 포지션 복구: {holding_qty}주, 매수가 {bought_price:,.0f}원")
-        state = "BOUGHT"
-    else:
-        state = "WAITING"
-
-    # ── STEP 4: 장 시작 대기 + 시가 캡처 ──
-    if state == "WAITING":
-        if not is_market_open():
-            print("장 시작을 기다립니다...")
-            wait_for_market_open()
-
-        # 시가 캡처 (KIS API로 정확한 시가 조회, 재시도 포함)
-        today_open = None
-        max_retries = 6  # 최대 30초 (5초 × 6회)
-        for attempt in range(max_retries):
-            time.sleep(5)  # 장 시작 직후 API 안정화 대기
-            today_open = broker.get_today_open(token, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
-            if today_open is not None and today_open > 0:
-                print(f"✅ 시가 조회 성공: {today_open:,.0f}원 (시도 {attempt+1}회)")
-                break
-            print(f"⏳ 시가 조회 재시도 중... ({attempt+1}/{max_retries})")
-        else:
-            # 재시도 실패, fallback
-            print("⚠️ KIS API 시가 조회 실패 (30초 타임아웃), yfinance로 대체")
-            today_open = get_today_open_yf()
-
-        if today_open is None or today_open == 0:
-            notify(notifier, "❌ <b>에러</b>", "시가 조회 실패")
-            print("❌ 시가 조회 실패. 종료합니다.")
+    try:
+        # ── STEP 1: 토큰 발급 ──
+        token = broker.get_access_token(APP_KEY, APP_SECRET, URL_REAL)
+        if not token:
+            notify(notifier, "❌ <b>에러</b>", "토큰 발급 실패")
+            print("❌ 토큰 발급 실패. 종료합니다.")
             return
 
-        target_price = today_open + yesterday_range * K
-        print(f"\n📋 오늘의 전략:")
-        print(f"   시가: {today_open:,.0f}원")
-        print(f"   목표가: {target_price:,.0f}원 (시가 + {yesterday_range:,.0f} × {K})")
-        print(f"   청산: 15:15 장마감 전 무조건 청산")
-        print("=" * 60)
+        # ── STEP 2: 전일 변동폭 + 노이즈 기반 K 계산 ──
+        yesterday_high, yesterday_low, yesterday_range, yesterday_open, yesterday_close = get_yesterday_range(token)
+        if yesterday_range is None:
+            notify(notifier, "❌ <b>에러</b>", "전일 데이터 조회 실패")
+            return
 
-        notify(notifier, "📋 <b>오늘의 목표가</b>",
-               f"시가: {today_open:,.0f}원\n"
-               f"목표가: {target_price:,.0f}원\n"
-               f"변동폭: {yesterday_range:,.0f}원 × K={K}\n"
-               f"노이즈: {noise_ratio:.2f} (K범위: {K_MIN}~{K_MAX})")
-    else:
-        # 미청산 포지션이 있으면 목표가 불필요 (이미 매수됨)
-        target_price = 0
-        today_open = 0
+        K = calculate_dynamic_k(yesterday_open, yesterday_close, yesterday_high, yesterday_low)
+        noise_ratio = 1 - abs(yesterday_open - yesterday_close) / (yesterday_high - yesterday_low) if yesterday_high != yesterday_low else 1.0
+
+        print(f"📊 전일 고가: {yesterday_high:,.0f}원, 저가: {yesterday_low:,.0f}원")
+        print(f"   변동폭: {yesterday_range:,.0f}원")
+        print(f"   노이즈 비율: {noise_ratio:.2f} → K={K} (범위: {K_MIN}~{K_MAX})")
+
+        # ── STEP 3: 미청산 포지션 확인 ──
+        bought_price, holding_qty = load_unclosed_position()
+        if bought_price > 0:
+            print(f"⚡ 미청산 포지션 복구: {holding_qty}주, 매수가 {bought_price:,.0f}원")
+            state = "BOUGHT"
+        else:
+            state = "WAITING"
+
+        # ── STEP 4: 장 시작 대기 + 시가 캡처 ──
+        if state == "WAITING":
+            if not is_market_open():
+                print("장 시작을 기다립니다...")
+                wait_for_market_open()
+
+            # 시가 캡처 (KIS API로 정확한 시가 조회, 재시도 포함)
+            today_open = None
+            max_retries = 6  # 최대 30초 (5초 × 6회)
+            for attempt in range(max_retries):
+                time.sleep(5)  # 장 시작 직후 API 안정화 대기
+                today_open = broker.get_today_open(token, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+                if today_open is not None and today_open > 0:
+                    print(f"✅ 시가 조회 성공: {today_open:,.0f}원 (시도 {attempt+1}회)")
+                    break
+                print(f"⏳ 시가 조회 재시도 중... ({attempt+1}/{max_retries})")
+            else:
+                # 재시도 실패, fallback
+                print("⚠️ KIS API 시가 조회 실패 (30초 타임아웃), yfinance로 대체")
+                today_open = get_today_open_yf()
+
+            if today_open is None or today_open == 0:
+                notify(notifier, "❌ <b>에러</b>", "시가 조회 실패")
+                print("❌ 시가 조회 실패. 종료합니다.")
+                return
+
+            target_price = today_open + yesterday_range * K
+            print(f"\n📋 오늘의 전략:")
+            print(f"   시가: {today_open:,.0f}원")
+            print(f"   목표가: {target_price:,.0f}원 (시가 + {yesterday_range:,.0f} × {K})")
+            print(f"   청산: 15:15 장마감 전 무조건 청산")
+            print("=" * 60)
+
+            notify(notifier, "📋 <b>오늘의 목표가</b>",
+                   f"시가: {today_open:,.0f}원\n"
+                   f"목표가: {target_price:,.0f}원\n"
+                   f"변동폭: {yesterday_range:,.0f}원 × K={K}\n"
+                   f"노이즈: {noise_ratio:.2f} (K범위: {K_MIN}~{K_MAX})")
+        else:
+            # 미청산 포지션이 있으면 목표가 불필요 (이미 매수됨)
+            target_price = 0
+            today_open = 0
+
+    except Exception as e:
+        error_msg = f"초기화 중 에러: {str(e)}"
+        import traceback
+        traceback.print_exc()
+        notify(notifier, "❌ <b>초기화 에러 (봇 종료)</b>", error_msg)
+        print(f"❌ {error_msg}")
+        return
 
     # ── STEP 5: 메인 루프 ──
     print(f"\n👀 모니터링 시작 (1분 간격)")

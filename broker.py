@@ -74,6 +74,59 @@ def get_current_price(token, app_key, app_secret, url_base, stock_code):
         print(f"❌ 시세 조회 실패: {res_data.get('msg1')}")
         return None
 
+def get_yesterday_ohlc(token, app_key, app_secret, url_base, stock_code):
+    """KIS API를 통해 전일 시가/고가/저가/종가를 가져옵니다."""
+    PATH = "uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
+    URL = f"{url_base}/{PATH}"
+
+    from datetime import datetime, timezone, timedelta
+    kst = timezone(timedelta(hours=9))
+    today_str = datetime.now(kst).strftime('%Y%m%d')
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}",
+        "appkey": app_key,
+        "appsecret": app_secret,
+        "tr_id": "FHKST03010100"
+    }
+
+    params = {
+        "FID_COND_MRKT_DIV_CODE": "J",
+        "FID_INPUT_ISCD": stock_code,
+        "FID_INPUT_DATE_1": today_str,
+        "FID_INPUT_DATE_2": today_str,
+        "FID_PERIOD_DIV_CODE": "D",
+        "FID_ORG_ADJ_PRC": "0"
+    }
+
+    try:
+        res = requests.get(URL, headers=headers, params=params, timeout=10)
+        res_data = res.json()
+        items = res_data.get('output2', [])
+        if items and len(items) >= 1:
+            # output2[0]은 당일(또는 가장 최근), 전일 데이터를 찾음
+            for item in items:
+                if item.get('stck_bsop_date') != today_str:
+                    return {
+                        'open': float(item['stck_oprc']),
+                        'high': float(item['stck_hgpr']),
+                        'low': float(item['stck_lwpr']),
+                        'close': float(item['stck_clpr'])
+                    }
+            # 당일만 있으면 첫 번째 항목 사용 (장 개시 전이면 이게 전일)
+            item = items[0]
+            return {
+                'open': float(item['stck_oprc']),
+                'high': float(item['stck_hgpr']),
+                'low': float(item['stck_lwpr']),
+                'close': float(item['stck_clpr'])
+            }
+    except Exception as e:
+        print(f"❌ KIS API 전일 데이터 조회 실패: {e}")
+    return None
+
+
 def get_today_open(token, app_key, app_secret, url_base, stock_code):
     """한국투자증권 API를 통해 당일 시가를 가져옵니다."""
     PATH = "uapi/domestic-stock/v1/quotations/inquire-price"
