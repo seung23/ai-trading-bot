@@ -211,23 +211,31 @@ def run_bot():
         print(f"   변동폭: {yesterday_range:,.0f}원")
         print(f"   노이즈 비율: {noise_ratio:.2f} → K={K} (범위: {K_MIN}~{K_MAX})")
 
-        # ── STEP 3: 미청산 포지션 확인 (CSV + 실제 계좌 교차 검증) ──
-        bought_price, holding_qty = load_unclosed_position()
-        if bought_price > 0:
-            # CSV에 미청산 기록이 있어도, 실제 계좌 잔고로 검증
-            actual_qty = broker.get_holding_quantity(
+        # ── STEP 3: 실제 계좌 기준 포지션 확인 (수동 매매 대응) ──
+        actual_qty = broker.get_holding_quantity(
+            token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
+        csv_price, csv_qty = load_unclosed_position()
+
+        if actual_qty > 0:
+            # 실제 보유 중 → 매수가는 계좌에서 조회 (CSV보다 정확)
+            actual_price = broker.get_stock_balance(
                 token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
-            if actual_qty > 0:
-                holding_qty = actual_qty  # 실제 수량으로 덮어씀
-                print(f"⚡ 미청산 포지션 복구: {holding_qty}주, 매수가 {bought_price:,.0f}원")
-                state = "BOUGHT"
+            bought_price = actual_price if actual_price > 0 else csv_price
+            holding_qty = actual_qty
+            if csv_qty == 0:
+                notify(notifier, "🔍 <b>수동 매수 감지</b>",
+                       f"실제 계좌: {holding_qty}주 보유 (매수가 {bought_price:,.0f}원)\n"
+                       f"봇이 청산 관리를 이어받습니다.")
+                print(f"🔍 수동 매수 감지: {holding_qty}주, 매수가 {bought_price:,.0f}원")
             else:
-                print(f"⚠️ CSV에 미청산 기록 있으나 실제 잔고 없음 → 포지션 없음으로 처리")
-                notify(notifier, "⚠️ <b>포지션 불일치</b>",
-                       f"CSV: {holding_qty}주 보유 기록\n실제 계좌: 0주\n신규 매매로 진행합니다.")
-                bought_price, holding_qty = 0, 0
-                state = "WAITING"
+                print(f"⚡ 포지션 확인: {holding_qty}주, 매수가 {bought_price:,.0f}원")
+            state = "BOUGHT"
         else:
+            if csv_qty > 0:
+                notify(notifier, "🔍 <b>수동 매도 감지</b>",
+                       f"CSV: {csv_qty}주 보유 기록\n실제 계좌: 0주\n수동 청산된 것으로 판단합니다.")
+                print(f"🔍 수동 매도 감지: CSV {csv_qty}주 → 실제 0주")
+            bought_price, holding_qty = 0, 0
             state = "WAITING"
 
         # ── STEP 4: 장 시작 대기 + 시가 캡처 ──
@@ -286,9 +294,13 @@ def run_bot():
     print("-" * 40)
 
     kst = timezone(timedelta(hours=9))
+    loop_count = 0
+    MANUAL_TRADE_CHECK_INTERVAL = 15  # 15루프(=30초)마다 잔고 조회로 수동매매 감지
     while True:
         try:
             now = datetime.now(kst)
+            loop_count += 1
+            check_manual = (loop_count % MANUAL_TRADE_CHECK_INTERVAL == 0)
 
             # 장 마감 체크
             if now.hour >= 15 and now.minute >= 20:
@@ -328,6 +340,24 @@ def run_bot():
 
             # ── 대기 상태: 돌파 감시 ──
             if state == "WAITING":
+                # 수동 매수 감지: 30초마다 실제 계좌 확인
+                if check_manual:
+                    actual_qty = broker.get_holding_quantity(
+                        token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
+                else:
+                    actual_qty = 0
+                if actual_qty > 0:
+                    actual_price = broker.get_stock_balance(
+                        token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
+                    bought_price = actual_price if actual_price > 0 else current_price
+                    holding_qty = actual_qty
+                    notify(notifier, "🔍 <b>수동 매수 감지</b>",
+                           f"실제 계좌: {holding_qty}주 (매수가 {bought_price:,.0f}원)\n봇이 청산 관리를 이어받습니다.")
+                    print(f"🔍 수동 매수 감지: {holding_qty}주, 매수가 {bought_price:,.0f}원 → BOUGHT로 전환")
+                    state = "BOUGHT"
+                    time.sleep(CHECK_INTERVAL)
+                    continue
+
                 print(f"[{now.strftime('%H:%M:%S')}] 현재가: {current_price:,.0f}원 | 목표가: {target_price:,.0f}원 | 대기 중")
 
                 if current_price >= target_price:
@@ -392,6 +422,21 @@ def run_bot():
 
             # ── 보유 상태: 장마감 청산 대기 ──
             elif state == "BOUGHT":
+                # 수동 매도 감지: 30초마다 실제 계좌 확인
+                if check_manual:
+                    actual_qty = broker.get_holding_quantity(
+                        token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
+                else:
+                    actual_qty = holding_qty  # 확인 안 하는 루프는 기존 수량 유지
+                if actual_qty == 0:
+                    notify(notifier, "🔍 <b>수동 매도 감지</b>",
+                           f"실제 계좌: 0주\n수동 청산된 것으로 판단합니다.\n당일 추가 매매를 하지 않습니다.")
+                    print(f"🔍 수동 매도 감지: 보유 0주 → SOLD로 전환")
+                    state = "SOLD"
+                    time.sleep(CHECK_INTERVAL)
+                    continue
+                holding_qty = actual_qty  # 수량 동기화 (부분 매도 대응)
+
                 profit_rate = (current_price * (1 - SELL_FEE) / (bought_price * (1 + BUY_FEE)) - 1) * 100
                 print(f"[{now.strftime('%H:%M:%S')}] 현재가: {current_price:,.0f}원 | 수익률: {profit_rate:+.2f}% | 청산 대기")
 
