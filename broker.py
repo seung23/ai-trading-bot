@@ -81,7 +81,10 @@ def get_yesterday_ohlc(token, app_key, app_secret, url_base, stock_code):
 
     from datetime import datetime, timezone, timedelta
     kst = timezone(timedelta(hours=9))
-    today_str = datetime.now(kst).strftime('%Y%m%d')
+    today = datetime.now(kst)
+    today_str = today.strftime('%Y%m%d')
+    # 시작일을 30일 전으로 설정하여 전일 데이터가 반드시 포함되도록 함
+    start_str = (today - timedelta(days=30)).strftime('%Y%m%d')
 
     headers = {
         "Content-Type": "application/json",
@@ -94,7 +97,7 @@ def get_yesterday_ohlc(token, app_key, app_secret, url_base, stock_code):
     params = {
         "FID_COND_MRKT_DIV_CODE": "J",
         "FID_INPUT_ISCD": stock_code,
-        "FID_INPUT_DATE_1": today_str,
+        "FID_INPUT_DATE_1": start_str,
         "FID_INPUT_DATE_2": today_str,
         "FID_PERIOD_DIV_CODE": "D",
         "FID_ORG_ADJ_PRC": "0"
@@ -114,14 +117,9 @@ def get_yesterday_ohlc(token, app_key, app_secret, url_base, stock_code):
                         'low': float(item['stck_lwpr']),
                         'close': float(item['stck_clpr'])
                     }
-            # 당일만 있으면 첫 번째 항목 사용 (장 개시 전이면 이게 전일)
-            item = items[0]
-            return {
-                'open': float(item['stck_oprc']),
-                'high': float(item['stck_hgpr']),
-                'low': float(item['stck_lwpr']),
-                'close': float(item['stck_clpr'])
-            }
+            # 전일 데이터를 찾지 못한 경우 (모든 항목이 당일)
+            print(f"⚠️ KIS API: 전일 데이터를 찾지 못했습니다. (항목 수: {len(items)}, 모두 당일 날짜)")
+            return None
     except Exception as e:
         print(f"❌ KIS API 전일 데이터 조회 실패: {e}")
     return None

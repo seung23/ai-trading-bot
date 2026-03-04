@@ -196,6 +196,14 @@ def run_bot():
             notify(notifier, "❌ <b>에러</b>", "전일 데이터 조회 실패")
             return
 
+        # 변동폭 0원 안전장치: 전일 고가=저가면 데이터 이상으로 판단
+        if yesterday_range == 0:
+            notify(notifier, "⚠️ <b>매매 중단</b>",
+                   f"전일 변동폭이 0원입니다 (고가={yesterday_high:,.0f}, 저가={yesterday_low:,.0f})\n"
+                   f"데이터 이상으로 판단하여 오늘 매매를 중단합니다.")
+            print(f"⚠️ 전일 변동폭 0원 (고가=저가={yesterday_high:,.0f}원). 데이터 이상 → 매매 중단.")
+            return
+
         K = calculate_dynamic_k(yesterday_open, yesterday_close, yesterday_high, yesterday_low)
         noise_ratio = 1 - abs(yesterday_open - yesterday_close) / (yesterday_high - yesterday_low) if yesterday_high != yesterday_low else 1.0
 
