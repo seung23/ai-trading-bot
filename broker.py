@@ -11,6 +11,8 @@ APP_SECRET = os.getenv("APP_SECRET")
 URL_REAL = os.getenv("URL_REAL")     # 실전 서버 (시세용)
 URL_MOCK = os.getenv("URL_MOCK")  # 모의 서버 (잔고/주문용)
 
+API_TIMEOUT = 10  # 모든 API 호출의 타임아웃 (초)
+
 # ── 실전/모의 tr_id 매핑 ──
 TR_IDS = {
     "REAL": {
@@ -27,6 +29,14 @@ TR_IDS = {
     },
 }
 
+def _safe_json(res):
+    """응답을 JSON으로 파싱합니다. 실패 시 빈 dict 반환."""
+    try:
+        return res.json()
+    except (ValueError, TypeError):
+        print(f"❌ JSON 파싱 실패 (HTTP {res.status_code}): {res.text[:200]}")
+        return {}
+
 def get_access_token(app_key, app_secret, url_base):
     headers = {"content-type":"application/json"}
     body = {
@@ -37,8 +47,12 @@ def get_access_token(app_key, app_secret, url_base):
     PATH = "oauth2/tokenP"
     URL = f"{url_base}/{PATH}"
 
-    res = requests.post(URL, headers=headers, data=json.dumps(body))
-    res_data = res.json()
+    try:
+        res = requests.post(URL, headers=headers, data=json.dumps(body), timeout=API_TIMEOUT)
+        res_data = _safe_json(res)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ 토큰 발급 요청 실패: {e}")
+        return None
 
     if 'access_token' in res_data:
         return res_data['access_token']
@@ -65,8 +79,12 @@ def get_current_price(token, app_key, app_secret, url_base, stock_code):
         "FID_INPUT_ISCD": stock_code
     }
 
-    res = requests.get(URL, headers=headers, params=params)
-    res_data = res.json()
+    try:
+        res = requests.get(URL, headers=headers, params=params, timeout=API_TIMEOUT)
+        res_data = _safe_json(res)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ 현재가 조회 요청 실패: {e}")
+        return None
 
     if res_data.get('output'):
         return float(res_data['output']['stck_prpr'])
@@ -104,8 +122,8 @@ def get_yesterday_ohlc(token, app_key, app_secret, url_base, stock_code):
     }
 
     try:
-        res = requests.get(URL, headers=headers, params=params, timeout=10)
-        res_data = res.json()
+        res = requests.get(URL, headers=headers, params=params, timeout=API_TIMEOUT)
+        res_data = _safe_json(res)
         items = res_data.get('output2', [])
         if items and len(items) >= 1:
             # output2[0]은 당일(또는 가장 최근), 전일 데이터를 찾음
@@ -143,8 +161,12 @@ def get_today_open(token, app_key, app_secret, url_base, stock_code):
         "FID_INPUT_ISCD": stock_code
     }
 
-    res = requests.get(URL, headers=headers, params=params)
-    res_data = res.json()
+    try:
+        res = requests.get(URL, headers=headers, params=params, timeout=API_TIMEOUT)
+        res_data = _safe_json(res)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ 시가 조회 요청 실패: {e}")
+        return None
 
     if res_data.get('output'):
         return float(res_data['output']['stck_oprc'])
@@ -176,13 +198,17 @@ def get_balance(token, app_key, app_secret, url_base, acc_no, stock_code, mode="
         "OVRS_ICLD_YN": "N"
     }
 
-    res = requests.get(URL, headers=headers, params=params)
-    res_data = res.json()
+    try:
+        res = requests.get(URL, headers=headers, params=params, timeout=API_TIMEOUT)
+        res_data = _safe_json(res)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ 잔고 조회 요청 실패: {e}")
+        return 0
 
     # 주문 가능 현금 추출
     output = res_data.get('output', {})
     cash = output.get('ord_psbl_cash') or output.get('nrcvb_buy_amt') or '0'
-    return int(cash)
+    return int(float(cash))
 
 def get_stock_balance(token, app_key, app_secret, url_base, acc_no, stock_code, mode="MOCK"):
     """특정 종목의 매수 평균가를 반환합니다. 보유하지 않으면 0 반환."""
@@ -208,8 +234,12 @@ def get_stock_balance(token, app_key, app_secret, url_base, acc_no, stock_code, 
         "CTX_AREA_NK100": ""
     }
 
-    res = requests.get(URL, headers=headers, params=params)
-    res_data = res.json()
+    try:
+        res = requests.get(URL, headers=headers, params=params, timeout=API_TIMEOUT)
+        res_data = _safe_json(res)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ 종목잔고 조회 요청 실패: {e}")
+        return 0
 
     stocks = res_data.get('output1', [])
 
@@ -252,14 +282,18 @@ def get_holding_quantity(token, app_key, app_secret, url_base, acc_no, stock_cod
         "CTX_AREA_NK100": ""
     }
 
-    res = requests.get(URL, headers=headers, params=params)
-    res_data = res.json()
+    try:
+        res = requests.get(URL, headers=headers, params=params, timeout=API_TIMEOUT)
+        res_data = _safe_json(res)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ 보유수량 조회 요청 실패: {e}")
+        return 0
 
     stocks = res_data.get('output1', [])
     for s in stocks:
         if s.get('pdno') == stock_code:
             qty = s.get('hldg_qty') or s.get('cblc_qty13') or '0'
-            return int(qty)
+            return int(float(qty))
     return 0
 
 # 매수
@@ -284,8 +318,12 @@ def post_order(token, app_key, app_secret, url_base, acc_no, stock_code, quantit
         "ORD_UNPR": "0"
     }
 
-    res = requests.post(URL, headers=headers, data=json.dumps(body))
-    return res.json()
+    try:
+        res = requests.post(URL, headers=headers, data=json.dumps(body), timeout=API_TIMEOUT)
+        return _safe_json(res)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ 매수 주문 요청 실패: {e}")
+        return {"rt_cd": "-1", "msg1": str(e)}
 
 # 매도
 def post_sell_order(token, app_key, app_secret, url_base, acc_no, stock_code, quantity, price, mode="MOCK"):
@@ -309,5 +347,9 @@ def post_sell_order(token, app_key, app_secret, url_base, acc_no, stock_code, qu
         "ORD_UNPR": "0"
     }
 
-    res = requests.post(URL, headers=headers, data=json.dumps(body))
-    return res.json()
+    try:
+        res = requests.post(URL, headers=headers, data=json.dumps(body), timeout=API_TIMEOUT)
+        return _safe_json(res)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ 매도 주문 요청 실패: {e}")
+        return {"rt_cd": "-1", "msg1": str(e)}

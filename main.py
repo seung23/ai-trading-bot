@@ -222,6 +222,17 @@ def run_bot():
                 token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
             bought_price = actual_price if actual_price > 0 else csv_price
             holding_qty = actual_qty
+            # 매수가를 어디서도 못 구한 경우 → 현재가로 대체 (0원 방지)
+            if bought_price <= 0:
+                fallback_price = broker.get_current_price(token, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+                if fallback_price and fallback_price > 0:
+                    bought_price = fallback_price
+                    print(f"⚠️ 매수가 조회 실패 → 현재가({bought_price:,.0f}원)로 대체")
+                else:
+                    notify(notifier, "❌ <b>매수가 조회 불가</b>",
+                           f"보유 {holding_qty}주이나 매수가를 알 수 없습니다.\n수동 확인 필요합니다.")
+                    print(f"❌ 매수가 조회 불가. 수동 확인 필요.")
+                    return
             if csv_qty == 0:
                 notify(notifier, "🔍 <b>수동 매수 감지</b>",
                        f"실제 계좌: {holding_qty}주 보유 (매수가 {bought_price:,.0f}원)\n"
@@ -302,29 +313,18 @@ def run_bot():
             loop_count += 1
             check_manual = (loop_count % MANUAL_TRADE_CHECK_INTERVAL == 0)
 
-            # 장 마감 체크
-            if now.hour >= 15 and now.minute >= 20:
+            # 장 마감 체크 (15:30 이후 → 봇 종료)
+            if now.hour >= 15 and now.minute >= 30:
                 if state == "BOUGHT":
-                    # 강제 청산
-                    current_price = broker.get_current_price(token, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
-                    if current_price:
-                        profit_rate = (current_price * (1 - SELL_FEE) / (bought_price * (1 + BUY_FEE)) - 1) * 100
-                        res = broker.post_sell_order(
-                            token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO,
-                            STOCK_CODE, holding_qty, current_price, mode="REAL")
-                        if res.get('rt_cd') == '0':
-                            log_trade("매도", current_price, holding_qty, profit=profit_rate, reason="장마감 강제청산")
-                            notify(notifier, "⏹️ <b>장마감 강제청산</b>",
-                                   f"가격: {current_price:,.0f}원\n수익률: {profit_rate:+.2f}%")
-                            print(f"⏹️ 장마감 강제청산! 수익률: {profit_rate:+.2f}%")
-                        else:
-                            notify(notifier, "❌ <b>매도 실패</b>", f"{res.get('msg1')}")
-                    notify(notifier, "✅ <b>봇 종료</b>", "내일 다시 실행됩니다.")
+                    # 15:30인데 아직 포지션이 열려 있음 → 긴급 알림
+                    notify(notifier, "🚨 <b>긴급: 미청산 포지션!</b>",
+                           f"15:30 장 마감인데 {holding_qty}주가 청산되지 않았습니다.\n"
+                           f"수동 매도가 필요합니다!")
+                    print(f"🚨 긴급! 15:30 미청산: {holding_qty}주. 수동 매도 필요!")
                 elif state == "WAITING":
                     notify(notifier, "⏹️ <b>장 마감</b>", "오늘은 돌파 없음. 매매 없이 종료.")
                     print("⏹️ 장 마감. 오늘은 돌파 없었습니다.")
-                    notify(notifier, "✅ <b>봇 종료</b>", "내일 다시 실행됩니다.")
-                # state == "SOLD": 당일 매매 완료, 장 마감 알림 없음
+                notify(notifier, "✅ <b>봇 종료</b>", "내일 다시 실행됩니다.")
                 print("프로그램을 종료합니다.")
                 return
 
@@ -351,6 +351,8 @@ def run_bot():
                         token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
                     bought_price = actual_price if actual_price > 0 else current_price
                     holding_qty = actual_qty
+                    if bought_price <= 0:
+                        bought_price = current_price  # 최후 방어: 현재가로 대체
                     notify(notifier, "🔍 <b>수동 매수 감지</b>",
                            f"실제 계좌: {holding_qty}주 (매수가 {bought_price:,.0f}원)\n봇이 청산 관리를 이어받습니다.")
                     print(f"🔍 수동 매수 감지: {holding_qty}주, 매수가 {bought_price:,.0f}원 → BOUGHT로 전환")
@@ -440,21 +442,30 @@ def run_bot():
                 profit_rate = (current_price * (1 - SELL_FEE) / (bought_price * (1 + BUY_FEE)) - 1) * 100
                 print(f"[{now.strftime('%H:%M:%S')}] 현재가: {current_price:,.0f}원 | 수익률: {profit_rate:+.2f}% | 청산 대기")
 
-                # 15:15 이후 청산
+                # 15:15 이후 청산 (15:30까지 매 루프 재시도)
                 if now.hour == 15 and now.minute >= 15:
-                    res = broker.post_sell_order(
-                        token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO,
-                        STOCK_CODE, holding_qty, current_price, mode="REAL")
+                    sell_price = current_price
+                    # current_price가 None이면 재조회
+                    if sell_price is None or sell_price <= 0:
+                        sell_price = broker.get_current_price(token, APP_KEY, APP_SECRET, URL_REAL, STOCK_CODE)
+                    if sell_price and sell_price > 0:
+                        res = broker.post_sell_order(
+                            token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO,
+                            STOCK_CODE, holding_qty, sell_price, mode="REAL")
 
-                    if res.get('rt_cd') == '0':
-                        log_trade("매도", current_price, holding_qty, profit=profit_rate, reason="장마감 청산")
-                        notify(notifier, "📤 <b>장마감 청산!</b>",
-                               f"가격: {current_price:,.0f}원\n수익률: {profit_rate:+.2f}%")
-                        print(f"✅ 장마감 청산! 수익률: {profit_rate:+.2f}%")
-                        state = "SOLD"
+                        if res.get('rt_cd') == '0':
+                            profit_rate = (sell_price * (1 - SELL_FEE) / (bought_price * (1 + BUY_FEE)) - 1) * 100
+                            log_trade("매도", sell_price, holding_qty, profit=profit_rate, reason="장마감 청산")
+                            notify(notifier, "📤 <b>장마감 청산!</b>",
+                                   f"가격: {sell_price:,.0f}원\n수익률: {profit_rate:+.2f}%")
+                            print(f"✅ 장마감 청산! 수익률: {profit_rate:+.2f}%")
+                            state = "SOLD"
+                        else:
+                            notify(notifier, "⚠️ <b>매도 실패 (재시도 중)</b>",
+                                   f"{res.get('msg1')}\n15:30까지 계속 재시도합니다.")
+                            print(f"⚠️ 매도 실패: {res.get('msg1')} → 다음 루프에서 재시도")
                     else:
-                        notify(notifier, "❌ <b>매도 실패</b>", f"{res.get('msg1')}")
-                        print(f"❌ 매도 실패: {res.get('msg1')}")
+                        print(f"⚠️ 현재가 조회 실패 → 다음 루프에서 재시도")
 
             # ── 청산 완료: 장 마감까지 대기 ──
             elif state == "SOLD":
