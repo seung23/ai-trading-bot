@@ -324,6 +324,7 @@ def run_bot():
     kst = timezone(timedelta(hours=9))
     loop_count = 0
     MANUAL_TRADE_CHECK_INTERVAL = 15  # 15루프(=30초)마다 잔고 조회로 수동매매 감지
+    zero_qty_count = 0  # 연속 0주 감지 횟수 (KIS API 일시적 누락 방어)
     while True:
         try:
             now = datetime.now(kst)
@@ -450,14 +451,21 @@ def run_bot():
                     actual_qty = holding_qty  # 확인 안 하는 루프는 기존 수량 유지
                 if actual_qty is None:
                     print(f"⚠️ 잔고 조회 실패 (API 오류) → 기존 수량 {holding_qty}주 유지")
+                    zero_qty_count = 0
                 elif actual_qty == 0:
+                    zero_qty_count += 1
+                    print(f"⚠️ 잔고 0주 감지 ({zero_qty_count}/2회) → 재확인 대기")
+                    if zero_qty_count < 2:
+                        time.sleep(CHECK_INTERVAL)
+                        continue
                     notify(notifier, "🔍 <b>수동 매도 감지</b>",
-                           f"실제 계좌: 0주\n수동 청산된 것으로 판단합니다.\n당일 추가 매매를 하지 않습니다.")
-                    print(f"🔍 수동 매도 감지: 보유 0주 → SOLD로 전환")
+                           f"실제 계좌: 0주 (2회 연속 확인)\n수동 청산된 것으로 판단합니다.\n당일 추가 매매를 하지 않습니다.")
+                    print(f"🔍 수동 매도 감지: 보유 0주 2회 연속 확인 → SOLD로 전환")
                     state = "SOLD"
                     time.sleep(CHECK_INTERVAL)
                     continue
                 else:
+                    zero_qty_count = 0
                     holding_qty = actual_qty  # 수량 동기화 (부분 매도 대응)
 
                 profit_rate = (current_price * (1 - SELL_FEE) / (bought_price * (1 + BUY_FEE)) - 1) * 100
