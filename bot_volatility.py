@@ -315,9 +315,10 @@ def run_bot():
                                 STOCK_CODE, mode="MOCK")
                             if bp > 0:
                                 bought_price = bp
-                                holding_qty = broker.get_holding_quantity(
+                                qty = broker.get_holding_quantity(
                                     token_mock, MOCK_APP_KEY, MOCK_APP_SECRET, URL_MOCK, MOCK_ACC_NO,
                                     STOCK_CODE, mode="MOCK")
+                                holding_qty = qty if qty is not None and qty > 0 else buy_qty
                                 break
 
                         if holding_qty > 0:

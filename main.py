@@ -216,7 +216,21 @@ def run_bot():
             token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
         csv_price, csv_qty = load_unclosed_position()
 
-        if actual_qty > 0:
+        if actual_qty is None:
+            # API 실패 시 CSV 기록 기반으로 복구
+            print(f"⚠️ 시작 시 잔고 조회 실패 → CSV 기록 기반으로 판단합니다.")
+            if csv_qty > 0:
+                bought_price = csv_price
+                holding_qty = csv_qty
+                notify(notifier, "⚠️ <b>포지션 복구 (CSV)</b>",
+                       f"잔고 API 조회 실패\nCSV 기록 기반 복구: {holding_qty}주, 매수가 {bought_price:,.0f}원\n"
+                       f"청산 관리를 이어받습니다.")
+                print(f"⚡ CSV 포지션 복구: {holding_qty}주, 매수가 {bought_price:,.0f}원")
+                state = "BOUGHT"
+            else:
+                bought_price, holding_qty = 0, 0
+                state = "WAITING"
+        elif actual_qty > 0:
             # 실제 보유 중 → 매수가는 계좌에서 조회 (CSV보다 정확)
             actual_price = broker.get_stock_balance(
                 token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
@@ -239,6 +253,9 @@ def run_bot():
                        f"봇이 청산 관리를 이어받습니다.")
                 print(f"🔍 수동 매수 감지: {holding_qty}주, 매수가 {bought_price:,.0f}원")
             else:
+                notify(notifier, "⚡ <b>포지션 복구</b>",
+                       f"실제 계좌: {holding_qty}주 보유 (매수가 {bought_price:,.0f}원)\n"
+                       f"청산 관리를 이어받습니다.")
                 print(f"⚡ 포지션 확인: {holding_qty}주, 매수가 {bought_price:,.0f}원")
             state = "BOUGHT"
         else:
@@ -401,9 +418,10 @@ def run_bot():
                                 STOCK_CODE, mode="REAL")
                             if bp > 0:
                                 bought_price = bp
-                                holding_qty = broker.get_holding_quantity(
+                                qty = broker.get_holding_quantity(
                                     token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO,
                                     STOCK_CODE, mode="REAL")
+                                holding_qty = qty if qty is not None and qty > 0 else buy_qty
                                 break
 
                         if holding_qty > 0:
@@ -430,14 +448,17 @@ def run_bot():
                         token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
                 else:
                     actual_qty = holding_qty  # 확인 안 하는 루프는 기존 수량 유지
-                if actual_qty == 0:
+                if actual_qty is None:
+                    print(f"⚠️ 잔고 조회 실패 (API 오류) → 기존 수량 {holding_qty}주 유지")
+                elif actual_qty == 0:
                     notify(notifier, "🔍 <b>수동 매도 감지</b>",
                            f"실제 계좌: 0주\n수동 청산된 것으로 판단합니다.\n당일 추가 매매를 하지 않습니다.")
                     print(f"🔍 수동 매도 감지: 보유 0주 → SOLD로 전환")
                     state = "SOLD"
                     time.sleep(CHECK_INTERVAL)
                     continue
-                holding_qty = actual_qty  # 수량 동기화 (부분 매도 대응)
+                else:
+                    holding_qty = actual_qty  # 수량 동기화 (부분 매도 대응)
 
                 profit_rate = (current_price * (1 - SELL_FEE) / (bought_price * (1 + BUY_FEE)) - 1) * 100
                 print(f"[{now.strftime('%H:%M:%S')}] 현재가: {current_price:,.0f}원 | 수익률: {profit_rate:+.2f}% | 청산 대기")

@@ -259,7 +259,7 @@ def get_stock_balance(token, app_key, app_secret, url_base, acc_no, stock_code, 
     return 0
 
 def get_holding_quantity(token, app_key, app_secret, url_base, acc_no, stock_code, mode="MOCK"):
-    """특정 종목의 보유 수량을 반환합니다. 보유하지 않으면 0 반환."""
+    """특정 종목의 보유 수량을 반환합니다. 보유하지 않으면 0, API 실패 시 None 반환."""
     PATH = "uapi/domestic-stock/v1/trading/inquire-balance"
     URL = f"{url_base}/{PATH}"
 
@@ -287,7 +287,11 @@ def get_holding_quantity(token, app_key, app_secret, url_base, acc_no, stock_cod
         res_data = _safe_json(res)
     except requests.exceptions.RequestException as e:
         print(f"❌ 보유수량 조회 요청 실패: {e}")
-        return 0
+        return None
+
+    if res_data is None:
+        print(f"❌ 보유수량 조회 응답 파싱 실패")
+        return None
 
     stocks = res_data.get('output1', [])
     for s in stocks:
