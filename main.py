@@ -362,6 +362,8 @@ def run_bot():
                 if check_manual:
                     actual_qty = broker.get_holding_quantity(
                         token, APP_KEY, APP_SECRET, URL_REAL, ACC_NO, STOCK_CODE, mode="REAL")
+                    if actual_qty is None:
+                        actual_qty = 0  # API 실패 시 안전하게 0으로 처리
                 else:
                     actual_qty = 0
                 if actual_qty > 0:
