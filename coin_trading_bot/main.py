@@ -32,7 +32,7 @@ LOG_FILE = "trade_log_eth.csv"
 K_MIN = 0.3                # 추세 명확 시 최소 K (노이즈 비율 ≤ 0.4)
 K_MAX = 0.6                # 노이즈 심할 때 최대 K (노이즈 비율 ≥ 0.7)
 MAX_SLIPPAGE = 0.01        # 목표가 대비 1% 이상 올라가 있으면 매수 스킵
-POSITION_RATIO = 0.70      # 현금의 70% 투입
+POSITION_RATIO = 0.01      # 현금의 1% 투입 (테스트용, 정상 확인 후 0.70으로 변경)
 CHECK_INTERVAL = 1         # 1초마다 체크
 # 업비트 수수료 (0.05%)
 BUY_FEE = 0.0005
