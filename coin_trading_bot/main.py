@@ -156,12 +156,17 @@ def run_daily_cycle(notifier):
         wait_until(CYCLE_START_HOUR, CYCLE_START_MINUTE)
 
     # ── STEP 2: 전일 OHLC + 동적 K 계산 ──
-    ohlc = upbit_broker.get_yesterday_ohlc(MARKET)
+    ohlc = None
+    for attempt in range(3):
+        ohlc = upbit_broker.get_yesterday_ohlc(MARKET)
+        if ohlc is not None:
+            break
+        print(f"   전일 OHLC 조회 재시도 ({attempt+1}/3)...")
+        time.sleep(10)
     if ohlc is None:
-        notify(notifier, "❌ <b>에러</b>", "전일 OHLC 조회 실패")
-        print("❌ 전일 OHLC 조회 실패. 5분 후 재시도합니다.")
-        time.sleep(300)
-        return  # run_bot의 while True가 다시 호출
+        notify(notifier, "❌ <b>에러</b>", "전일 OHLC 조회 실패 (3회 재시도 후)")
+        print("❌ 전일 OHLC 조회 실패. 프로세스를 종료합니다.")
+        return
 
     yesterday_high = ohlc['high']
     yesterday_low = ohlc['low']
@@ -259,6 +264,7 @@ def run_daily_cycle(notifier):
     print(f"\n👀 모니터링 시작")
     print("-" * 40)
 
+    cycle_start_time = datetime.now(KST)  # hard cutoff 판단용
     loop_count = 0
     MANUAL_CHECK_INTERVAL = 15
     zero_qty_count = 0
@@ -302,6 +308,18 @@ def run_daily_cycle(notifier):
             if state == "WAITING" and is_next_cycle(now):
                 notify(notifier, "⏹️ <b>사이클 종료</b>", "오늘은 돌파 없음. 매매 없이 종료.")
                 print("⏹️ 돌파 없이 사이클 종료.")
+                return
+
+            # 09:00 hard cutoff: 08:55~08:59 매도 실패 시 프로세스 강제 종료
+            # (09:00에 cron이 새 인스턴스를 시작하므로 두 프로세스 충돌 방지)
+            # BOUGHT 상태 + 20시간 이상 경과한 어제 프로세스만 해당
+            elapsed_hours = (now - cycle_start_time).total_seconds() / 3600
+            if (state == "BOUGHT" and elapsed_hours > 20
+                    and now.hour == CYCLE_START_HOUR and now.minute >= CYCLE_START_MINUTE):
+                notify(notifier, "🚨 <b>긴급: 미청산 포지션!</b>",
+                       f"08:55~08:59 매도 실패. {holding_qty:.8f} ETH 미청산.\n"
+                       f"09:00 새 프로세스에서 청산을 재시도합니다.")
+                print(f"🚨 09:00 hard cutoff! 미청산 {holding_qty:.8f} ETH → 새 프로세스에 위임")
                 return
 
             # 현재가 조회
