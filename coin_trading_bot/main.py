@@ -121,26 +121,25 @@ def wait_until(hour, minute):
 def run_bot():
     notifier = TelegramNotifier(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
     notify(notifier, "🚀 <b>ETH 변동성 돌파 봇 시작</b>",
-           f"마켓: {MARKET}\n모드: 24/7 연속 운영")
+           f"마켓: {MARKET}\n모드: cron 1일 1회")
 
     print("=" * 60)
     print(f"🚀 ETH 변동성 돌파 봇 시작! (업비트)")
     print(f"   마켓: {MARKET}")
-    print(f"   사이클: 09:00 매수 감시 → 다음날 08:55 청산")
+    print(f"   사이클: 09:00 매수 감시 → 트레일링 스탑 or 다음날 08:55 청산 → 종료")
     print("=" * 60)
 
-    # 무한 루프: 매일 사이클 반복
-    while True:
-        try:
-            run_daily_cycle(notifier)
-        except Exception as e:
-            error_msg = f"사이클 에러: {str(e)}"
-            import traceback
-            traceback.print_exc()
-            notify(notifier, "❌ <b>사이클 에러</b>", error_msg)
-            print(f"❌ {error_msg}")
-            print("   60초 후 새 사이클을 시작합니다...")
-            time.sleep(60)
+    try:
+        run_daily_cycle(notifier)
+    except Exception as e:
+        error_msg = f"사이클 에러: {str(e)}"
+        import traceback
+        traceback.print_exc()
+        notify(notifier, "❌ <b>사이클 에러</b>", error_msg)
+        print(f"❌ {error_msg}")
+
+    notify(notifier, "⏹️ <b>봇 종료</b>", "프로세스를 종료합니다. 내일 09:00에 cron이 재시작합니다.")
+    print("\n⏹️ 봇 종료. 내일 09:00에 cron이 재시작합니다.")
 
 
 def run_daily_cycle(notifier):
@@ -174,7 +173,6 @@ def run_daily_cycle(notifier):
         notify(notifier, "⚠️ <b>매매 중단</b>",
                f"전일 변동폭이 0원입니다.\n데이터 이상으로 판단하여 오늘 매매를 중단합니다.")
         print("⚠️ 전일 변동폭 0원. 다음 사이클까지 대기합니다.")
-        wait_until_next_cycle()
         return
 
     K = calculate_dynamic_k(yesterday_open, yesterday_close, yesterday_high, yesterday_low)
@@ -212,7 +210,6 @@ def run_daily_cycle(notifier):
             else:
                 notify(notifier, "❌ <b>매수가 조회 불가</b>",
                        f"보유 {holding_qty:.8f} ETH이나 매수가를 알 수 없습니다.")
-                wait_until_next_cycle()
                 return
         notify(notifier, "⚡ <b>포지션 복구</b>",
                f"보유: {holding_qty:.8f} ETH (매수가 {bought_price:,.0f}원)")
@@ -239,8 +236,7 @@ def run_daily_cycle(notifier):
 
         if today_open is None or today_open == 0:
             notify(notifier, "❌ <b>에러</b>", "시가 조회 실패")
-            print("❌ 시가 조회 실패. 다음 사이클까지 대기합니다.")
-            wait_until_next_cycle()
+            print("❌ 시가 조회 실패. 프로세스를 종료합니다.")
             return
 
         target_price = today_open + yesterday_range * K
@@ -299,14 +295,14 @@ def run_daily_cycle(notifier):
                     time.sleep(CHECK_INTERVAL)
                     continue
 
-            # 새 사이클 전환 시점 (09:00 도달)
-            if state == "SOLD" or (state == "WAITING" and is_next_cycle(now)):
-                if state == "WAITING":
-                    notify(notifier, "⏹️ <b>사이클 종료</b>", "오늘은 돌파 없음. 매매 없이 종료.")
-                    print("⏹️ 돌파 없이 사이클 종료.")
-                print("   다음 사이클까지 대기합니다...")
-                wait_until_next_cycle()
-                return  # run_bot의 while True가 다시 호출
+            # 사이클 종료 체크
+            if state == "SOLD":
+                print("✅ 청산 완료. 프로세스를 종료합니다.")
+                return
+            if state == "WAITING" and is_next_cycle(now):
+                notify(notifier, "⏹️ <b>사이클 종료</b>", "오늘은 돌파 없음. 매매 없이 종료.")
+                print("⏹️ 돌파 없이 사이클 종료.")
+                return
 
             # 현재가 조회
             current_price = upbit_broker.get_current_price(MARKET)
@@ -484,32 +480,6 @@ def is_next_cycle(now):
     """
     return now.hour == SELL_HOUR and now.minute >= SELL_MINUTE
 
-
-def wait_until_next_cycle():
-    """다음 09:00까지 대기합니다."""
-    while True:
-        now = datetime.now(KST)
-        # 현재 09:00 이전이면 오늘 09:00까지, 아니면 내일 09:00까지
-        if now.hour < CYCLE_START_HOUR:
-            target = now.replace(hour=CYCLE_START_HOUR, minute=CYCLE_START_MINUTE,
-                                 second=0, microsecond=0)
-        else:
-            # 내일 09:00
-            tomorrow = now + timedelta(days=1)
-            target = tomorrow.replace(hour=CYCLE_START_HOUR, minute=CYCLE_START_MINUTE,
-                                      second=0, microsecond=0)
-
-        remaining = (target - now).total_seconds()
-        if remaining <= 0:
-            return
-
-        if remaining > 120:
-            print(f"   다음 사이클까지 {int(remaining // 60)}분 남음...")
-            time.sleep(60)
-        elif remaining > 10:
-            time.sleep(10)
-        else:
-            time.sleep(1)
 
 
 if __name__ == "__main__":
