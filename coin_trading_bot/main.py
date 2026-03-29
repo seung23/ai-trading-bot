@@ -270,6 +270,13 @@ def run_daily_cycle(notifier):
     zero_qty_count = 0
     highest_price = bought_price  # 트레일링 스탑용 고점 추적
 
+    # 잔고 미리 조회 (돌파 시 즉시 매수하기 위해)
+    cached_buy_amount = 0
+    if state == "WAITING":
+        cash = upbit_broker.get_balance(UPBIT_ACCESS_KEY, UPBIT_SECRET_KEY)
+        cached_buy_amount = int(cash * POSITION_RATIO)
+        print(f"   현금: {cash:,.0f}원 → 매수 금액: {cached_buy_amount:,}원")
+
     while True:
         try:
             now = datetime.now(KST)
@@ -362,22 +369,19 @@ def run_daily_cycle(notifier):
                         time.sleep(CHECK_INTERVAL)
                         continue
 
-                    # 매수!
-                    cash = upbit_broker.get_balance(UPBIT_ACCESS_KEY, UPBIT_SECRET_KEY)
-                    buy_amount = int(cash * POSITION_RATIO)  # KRW 금액
-
-                    if buy_amount < 5000:  # 업비트 최소 주문 금액
-                        notify(notifier, "⚠️ <b>잔고 부족</b>", f"현금: {cash:,.0f}원")
-                        print(f"⚠️ 잔고 부족 (현금: {cash:,.0f}원)")
+                    # 매수! (잔고는 루프 진입 전 미리 조회됨)
+                    if cached_buy_amount < 5000:  # 업비트 최소 주문 금액
+                        notify(notifier, "⚠️ <b>잔고 부족</b>", f"매수 금액: {cached_buy_amount:,}원")
+                        print(f"⚠️ 잔고 부족 (매수 금액: {cached_buy_amount:,}원)")
                         state = "SOLD"
                         time.sleep(CHECK_INTERVAL)
                         continue
 
                     print(f"\n🔥 돌파! {current_price:,.0f}원 ≥ {target_price:,.0f}원")
-                    print(f"   매수 금액: {buy_amount:,}원")
+                    print(f"   매수 금액: {cached_buy_amount:,}원")
 
                     res = upbit_broker.post_buy_order(
-                        UPBIT_ACCESS_KEY, UPBIT_SECRET_KEY, MARKET, price=buy_amount)
+                        UPBIT_ACCESS_KEY, UPBIT_SECRET_KEY, MARKET, price=cached_buy_amount)
 
                     if "uuid" in res:
                         # 체결 확인 (20초 대기)
