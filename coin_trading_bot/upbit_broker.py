@@ -41,6 +41,23 @@ def _safe_json(res):
 
 # ── 시세 조회 (인증 불필요) ──
 
+def get_batch_prices(markets):
+    """여러 종목의 현재가를 한 번에 조회합니다.
+    markets: list of str (예: ["KRW-ETH", "KRW-BTC", "KRW-SOL"])
+    Returns: dict {market: price} 실패 시 빈 dict
+    """
+    url = f"{API_BASE}/v1/ticker"
+    params = {"markets": ",".join(markets)}
+    try:
+        res = requests.get(url, params=params, timeout=API_TIMEOUT)
+        data = _safe_json(res)
+        if isinstance(data, list):
+            return {item["market"]: float(item["trade_price"]) for item in data}
+    except requests.exceptions.RequestException as e:
+        print(f"   배치 시세 조회 실패: {e}")
+    return {}
+
+
 def get_current_price(market="KRW-ETH"):
     """현재가를 조회합니다. 실패 시 None 반환."""
     url = f"{API_BASE}/v1/ticker"
@@ -76,6 +93,32 @@ def get_yesterday_ohlc(market="KRW-ETH"):
     except requests.exceptions.RequestException as e:
         print(f"   전일 OHLC 조회 실패: {e}")
     return None
+
+
+def get_daily_candles(market="KRW-ETH", count=15):
+    """최근 N일치 일봉을 조회합니다. 최신순 리스트 반환.
+    Returns: list of dict {open, high, low, close, volume, date} or []
+    """
+    url = f"{API_BASE}/v1/candles/days"
+    params = {"market": market, "count": count}
+    try:
+        res = requests.get(url, params=params, timeout=API_TIMEOUT)
+        data = _safe_json(res)
+        if isinstance(data, list) and len(data) > 0:
+            candles = []
+            for d in data:
+                candles.append({
+                    "open": float(d["opening_price"]),
+                    "high": float(d["high_price"]),
+                    "low": float(d["low_price"]),
+                    "close": float(d["trade_price"]),
+                    "volume": float(d["candle_acc_trade_volume"]),
+                    "date": d["candle_date_time_kst"][:10],
+                })
+            return candles
+    except requests.exceptions.RequestException as e:
+        print(f"   일봉 조회 실패: {e}")
+    return []
 
 
 def get_today_open(market="KRW-ETH"):
